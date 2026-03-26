@@ -1,0 +1,2907 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DripArt — Sistema de Gestão</title>
+<style>
+:root {
+  --purple: #534AB7;
+  --purple-light: #EEEDFE;
+  --purple-mid: #7F77DD;
+  --teal: #1D9E75;
+  --teal-light: #E1F5EE;
+  --amber: #BA7517;
+  --amber-light: #FAEEDA;
+  --coral: #D85A30;
+  --coral-light: #FAECE7;
+  --blue: #378ADD;
+  --blue-light: #E6F1FB;
+  --gray-bg: #F1EFE8;
+  --gray: #5F5E5A;
+  --text: #2C2C2A;
+  --text-muted: #888780;
+  --border: rgba(44,44,42,0.12);
+  --bg: #fff;
+  --bg2: #F7F6F2;
+  --success: #27500A;
+  --success-bg: #EAF3DE;
+  --warning: #633806;
+  --warning-bg: #FAEEDA;
+  --danger: #791F1F;
+  --danger-bg: #FCEBEB;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg2); color: var(--text); font-size: 14px; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; font-size: 14px; }
+input, select, textarea { font-family: inherit; font-size: 14px; }
+
+/* Layout */
+.app { display: flex; height: 100vh; overflow: hidden; }
+.sidebar { width: 220px; background: var(--bg); border-right: 0.5px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.main-content { flex: 1; overflow-y: auto; }
+
+/* Sidebar */
+.logo-area { padding: 20px 18px 16px; border-bottom: 0.5px solid var(--border); }
+.logo-wrap { display: flex; align-items: center; gap: 10px; }
+.logo-icon { width: 32px; height: 32px; background: var(--purple); border-radius: 9px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+.logo-text { font-size: 16px; font-weight: 600; color: var(--text); }
+.logo-sub { font-size: 11px; color: var(--text-muted); }
+.nav { padding: 12px 8px; flex: 1; }
+.nav-section { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px 4px; margin-top: 6px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--text-muted); cursor: pointer; margin-bottom: 1px; transition: all 0.15s; font-size: 13px; }
+.nav-item:hover { background: var(--bg2); color: var(--text); }
+.nav-item.active { background: var(--purple-light); color: var(--purple); font-weight: 500; }
+.nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.sidebar-footer { padding: 12px 18px; border-top: 0.5px solid var(--border); font-size: 11px; color: var(--text-muted); }
+
+/* Page */
+.page { display: none; padding: 28px 32px; }
+.page.active { display: block; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-title { font-size: 20px; font-weight: 600; color: var(--text); }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text); font-weight: 500; transition: all 0.15s; }
+.btn:hover { background: var(--bg2); }
+.btn-primary { background: var(--purple); color: white; border-color: var(--purple); }
+.btn-primary:hover { background: #433EA0; border-color: #433EA0; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-danger { color: var(--danger); border-color: rgba(163,45,45,0.3); }
+.btn-danger:hover { background: var(--danger-bg); }
+.btn-success { background: var(--teal); color: white; border-color: var(--teal); }
+.btn-success:hover { background: #166b52; }
+
+/* Cards */
+.card { background: var(--bg); border: 0.5px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+
+/* Metric cards */
+.metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.metric-card { background: var(--bg2); border-radius: 10px; padding: 14px 16px; }
+.metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.metric-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.metric-sub { font-size: 11px; margin-top: 4px; color: var(--text-muted); }
+.metric-sub.up { color: var(--teal); }
+.metric-sub.warn { color: var(--amber); }
+.metric-sub.danger { color: var(--coral); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; background: var(--bg2); color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 0.5px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 0.5px solid var(--border); color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg2); }
+
+/* Badges */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.badge-green { background: var(--success-bg); color: var(--success); }
+.badge-amber { background: var(--warning-bg); color: var(--warning); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-blue { background: var(--blue-light); color: #0C447C; }
+.badge-gray { background: var(--gray-bg); color: var(--gray); }
+.badge-purple { background: var(--purple-light); color: var(--purple); }
+
+/* Forms */
+.form-grid { display: grid; gap: 16px; }
+.form-grid-2 { grid-template-columns: 1fr 1fr; }
+.form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.form-control { padding: 8px 12px; border: 0.5px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); outline: none; transition: border 0.15s; }
+.form-control:focus { border-color: var(--purple-mid); }
+select.form-control { cursor: pointer; }
+
+/* Bar charts */
+.bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: flex; align-items: center; gap: 10px; }
+.bar-label-text { font-size: 11px; color: var(--text-muted); width: 80px; text-align: right; flex-shrink: 0; }
+.bar-track { flex: 1; height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.bar-value { font-size: 11px; color: var(--text-muted); width: 70px; text-align: right; flex-shrink: 0; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--bg); border-radius: 14px; padding: 24px; width: 580px; max-width: 95vw; max-height: 90vh; overflow-y: auto; border: 0.5px solid var(--border); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.modal-close:hover { background: var(--bg2); }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 0.5px solid var(--border); }
+
+/* Items list in PDV/Locação */
+.items-list { border: 0.5px solid var(--border); border-radius: 8px; overflow: hidden; margin: 12px 0; }
+.item-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 0.5px solid var(--border); }
+.item-row:last-child { border-bottom: none; }
+.item-desc { flex: 1; font-size: 13px; }
+.item-qty { width: 60px; }
+.item-price { width: 90px; }
+.item-sub { width: 80px; text-align: right; font-size: 13px; font-weight: 500; color: var(--purple); }
+.item-remove { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px; border-radius: 4px; }
+.item-remove:hover { color: var(--coral); background: var(--coral-light); }
+
+/* Totals */
+.totals-box { background: var(--bg2); border-radius: 8px; padding: 14px 16px; margin-top: 10px; }
+.total-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 13px; }
+.total-row.final { font-size: 16px; font-weight: 600; color: var(--purple); border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+
+/* Quick actions */
+.qa-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.qa-btn { background: var(--bg); border: 0.5px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all 0.15s; }
+.qa-btn:hover { background: var(--bg2); border-color: var(--purple-mid); }
+.qa-icon { width: 28px; height: 28px; border-radius: 8px; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.qa-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 200; opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: var(--teal); }
+.toast.error { background: var(--coral); }
+
+/* Impressão calculator */
+.calc-box { background: var(--purple-light); border-radius: 10px; padding: 16px; }
+.calc-result { font-size: 22px; font-weight: 700; color: var(--purple); margin: 8px 0 4px; }
+.calc-detail { font-size: 12px; color: var(--gray); }
+
+/* Responsive two-col */
+.two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* Filters bar */
+.filters-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+.empty-state-icon { font-size: 36px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo-area">
+      <div class="logo-wrap">
+        <div class="logo-icon">D</div>
+        <div>
+          <div class="logo-text">DripArt</div>
+          <div class="logo-sub">Gestão inteligente</div>
+        </div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nav-item active" data-page="dashboard">
+        <span class="nav-dot" style="background:var(--purple)"></span> Dashboard
+      </div>
+      <div class="nav-item" data-page="pdv">
+        <span class="nav-dot" style="background:var(--blue)"></span> Caixa / PDV
+      </div>
+      <div class="nav-item" data-page="locacoes">
+        <span class="nav-dot" style="background:var(--teal)"></span> Locações
+      </div>
+      <div class="nav-item" data-page="orcamentos">
+        <span class="nav-dot" style="background:var(--amber)"></span> Orçamentos
+      </div>
+      <div class="nav-item" data-page="relatorios">
+        <span class="nav-dot" style="background:var(--coral)"></span> Relatórios
+      </div>
+      <div class="nav-section">Cadastros</div>
+      <div class="nav-item" data-page="clientes">
+        <span class="nav-dot" style="background:var(--gray)"></span> Clientes
+      </div>
+      <div class="nav-item" data-page="produtos">
+        <span class="nav-dot" style="background:var(--gray)"></span> Produtos
+      </div>
+      <div class="nav-item" data-page="itens-locacao">
+        <span class="nav-dot" style="background:var(--gray)"></span> Itens p/ Locação
+      </div>
+      <div class="nav-item" data-page="impressao">
+        <span class="nav-dot" style="background:var(--gray)"></span> Calculadora
+      </div>
+      <div class="nav-section">Financeiro</div>
+      <div class="nav-item" data-page="despesas">
+        <span class="nav-dot" style="background:var(--coral)"></span> Despesas
+      </div>
+      <div class="nav-item" data-page="fluxo">
+        <span class="nav-dot" style="background:var(--teal)"></span> Fluxo de caixa
+      </div>
+      <div class="nav-section">Operação</div>
+      <div class="nav-item" data-page="encomendas">
+        <span class="nav-dot" style="background:var(--purple)"></span> Encomendas
+      </div>
+      <div class="nav-item" data-page="servicos">
+        <span class="nav-dot" style="background:var(--blue)"></span> Serviços
+      </div>
+      <div class="nav-item" data-page="configuracoes">
+        <span class="nav-dot" style="background:var(--gray)"></span> Configurações
+      </div>
+    </div>
+    <div class="sidebar-footer">DripArt ERP v1.0</div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <span id="dash-date" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Receita do mês</div>
+          <div class="metric-value" id="m-receita">—</div>
+          <div class="metric-sub up" id="m-receita-sub"></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Vendas hoje</div>
+          <div class="metric-value" id="m-vendas-hoje">—</div>
+          <div class="metric-sub" id="m-vendas-hoje-sub"></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Locações ativas</div>
+          <div class="metric-value" id="m-locacoes">—</div>
+          <div class="metric-sub" id="m-locacoes-sub"></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Orçamentos abertos</div>
+          <div class="metric-value" id="m-orcamentos">—</div>
+          <div class="metric-sub warn">aguardando resposta</div>
+        </div>
+      </div>
+      <div class="metrics-grid" style="margin-bottom:16px">
+        <div class="metric-card">
+          <div class="metric-label">Saldo do mês</div>
+          <div class="metric-value" id="m-saldo">—</div>
+          <div class="metric-sub" id="m-saldo-sub"></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Saídas do mês</div>
+          <div class="metric-value" id="m-saidas">—</div>
+          <div class="metric-sub danger">despesas registradas</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Encomendas ativas</div>
+          <div class="metric-value" id="m-encomendas">—</div>
+          <div class="metric-sub" id="m-enc-sub"></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Ação rápida</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="navigateTo('despesas');openModal('modal-despesa')" style="font-size:11px">+ Despesa</button>
+            <button class="btn btn-sm" onclick="navigateTo('encomendas');openModal('modal-encomenda')" style="font-size:11px">+ Encomenda</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa-grid">
+        <div class="qa-btn" onclick="navigateTo('pdv');openModal('modal-venda')">
+          <div class="qa-icon" style="background:var(--blue-light)">+</div>
+          <div class="qa-label">Nova venda</div>
+        </div>
+        <div class="qa-btn" onclick="navigateTo('locacoes');openModal('modal-locacao')">
+          <div class="qa-icon" style="background:var(--teal-light)">📦</div>
+          <div class="qa-label">Nova locação</div>
+        </div>
+        <div class="qa-btn" onclick="navigateTo('orcamentos');openModal('modal-orcamento')">
+          <div class="qa-icon" style="background:var(--amber-light)">📄</div>
+          <div class="qa-label">Novo orçamento</div>
+        </div>
+        <div class="qa-btn" onclick="navigateTo('impressao')">
+          <div class="qa-icon" style="background:var(--purple-light)">🖨️</div>
+          <div class="qa-label">Calc. impressão</div>
+        </div>
+      </div>
+
+      <!-- Painel de alertas de locação -->
+      <div id="painel-alertas" style="display:none;margin-bottom:16px">
+        <div class="card" style="border-left:3px solid var(--coral);border-radius:0 12px 12px 0">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--coral)"></div>
+            <div class="card-title" style="margin:0;color:var(--coral)">Alertas de locação</div>
+          </div>
+          <div id="alertas-lista"></div>
+        </div>
+      </div>
+
+      <div class="two-col-grid">
+        <div class="card">
+          <div class="card-title">Receita por categoria</div>
+          <div class="bar-chart" id="chart-categorias">
+            <div style="color:var(--text-muted);font-size:13px">Carregando...</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Últimas movimentações</div>
+          <div id="ultimas-movs">
+            <div style="color:var(--text-muted);font-size:13px">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDV / CAIXA -->
+    <div class="page" id="page-pdv">
+      <div class="page-header">
+        <div class="page-title">Caixa / PDV</div>
+        <button class="btn btn-primary" onclick="openModal('modal-venda')">+ Nova venda</button>
+      </div>
+      <div class="filters-bar">
+        <input type="date" id="pdv-data-ini" class="form-control" style="width:160px">
+        <input type="date" id="pdv-data-fim" class="form-control" style="width:160px">
+        <button class="btn" onclick="loadVendas()">Filtrar</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table id="tabela-vendas">
+            <thead><tr>
+              <th>#</th><th>Cliente</th><th>Tipo</th><th>Pagamento</th>
+              <th>Total</th><th>Status</th><th>Data</th><th></th>
+            </tr></thead>
+            <tbody id="tbody-vendas">
+              <tr><td colspan="8" class="empty-state"><div>Carregando...</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOCAÇÕES -->
+    <div class="page" id="page-locacoes">
+      <div class="page-header">
+        <div class="page-title">Locações</div>
+        <button class="btn btn-primary" onclick="openModal('modal-locacao')">+ Nova locação</button>
+      </div>
+      <div class="filters-bar">
+        <button class="btn btn-sm" onclick="loadLocacoes('')">Todas</button>
+        <button class="btn btn-sm" onclick="loadLocacoes('ativo')">Ativas</button>
+        <button class="btn btn-sm" onclick="loadLocacoes('devolvido')">Devolvidas</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Cliente</th><th>Retirada</th><th>Devolução</th>
+              <th>Total</th><th>Status</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="tbody-locacoes">
+              <tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORÇAMENTOS -->
+    <div class="page" id="page-orcamentos">
+      <div class="page-header">
+        <div class="page-title">Orçamentos</div>
+        <button class="btn btn-primary" onclick="openModal('modal-orcamento')">+ Novo orçamento</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Número</th><th>Cliente</th><th>Validade</th>
+              <th>Total</th><th>Status</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="tbody-orcamentos">
+              <tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RELATÓRIOS -->
+    <div class="page" id="page-relatorios">
+      <div class="page-header">
+        <div class="page-title">Relatórios</div>
+      </div>
+      <div class="filters-bar">
+        <label style="font-size:13px;color:var(--text-muted)">De:</label>
+        <input type="date" id="rel-ini" class="form-control" style="width:160px">
+        <label style="font-size:13px;color:var(--text-muted)">Até:</label>
+        <input type="date" id="rel-fim" class="form-control" style="width:160px">
+        <button class="btn btn-primary" onclick="loadRelatorio()">Gerar relatório</button>
+        <button class="btn" id="btn-export-rel" style="display:none" onclick="exportarRelatorio()">📄 Exportar PDF</button>
+      </div>
+      <div id="relatorio-content">
+        <div style="color:var(--text-muted);text-align:center;padding:48px">Selecione o período e clique em Gerar relatório.</div>
+      </div>
+    </div>
+
+    <!-- CLIENTES -->
+    <div class="page" id="page-clientes">
+      <div class="page-header">
+        <div class="page-title">Clientes</div>
+        <button class="btn btn-primary" onclick="openModal('modal-cliente')">+ Novo cliente</button>
+      </div>
+      <div class="filters-bar">
+        <input type="text" id="q-clientes" class="form-control" placeholder="Buscar por nome..." style="width:260px" oninput="loadClientes()">
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Telefone</th><th>Email</th><th>CPF/CNPJ</th><th>Ações</th></tr></thead>
+            <tbody id="tbody-clientes">
+              <tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRODUTOS -->
+    <div class="page" id="page-produtos">
+      <div class="page-header">
+        <div class="page-title">Produtos e serviços</div>
+        <button class="btn btn-primary" onclick="openModal('modal-produto')">+ Novo produto</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nome</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Ações</th></tr></thead>
+            <tbody id="tbody-produtos">
+              <tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ITENS LOCAÇÃO -->
+    <div class="page" id="page-itens-locacao">
+      <div class="page-header">
+        <div class="page-title">Itens para locação</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn" onclick="openModal('modal-kit')">+ Novo kit</button>
+          <button class="btn btn-primary" onclick="openModal('modal-item-locacao')">+ Novo item</button>
+        </div>
+      </div>
+      <div class="two-col-grid">
+        <div class="card">
+          <div class="card-title">Itens individuais</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Categoria</th><th>Diária</th><th>Qtd</th><th></th></tr></thead>
+              <tbody id="tbody-itens-locacao"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Kits</div>
+          <div id="lista-kits"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DESPESAS -->
+    <div class="page" id="page-despesas">
+      <div class="page-header">
+        <div class="page-title">Despesas e saídas</div>
+        <button class="btn btn-primary" onclick="openModal('modal-despesa')">+ Nova despesa</button>
+      </div>
+      <div class="filters-bar">
+        <input type="date" id="desp-ini" class="form-control" style="width:160px">
+        <input type="date" id="desp-fim" class="form-control" style="width:160px">
+        <button class="btn" onclick="loadDespesas()">Filtrar</button>
+      </div>
+      <div class="metrics-grid" style="margin-bottom:16px">
+        <div class="metric-card"><div class="metric-label">Total no período</div><div class="metric-value" id="desp-total">—</div></div>
+        <div class="metric-card"><div class="metric-label">Quantidade</div><div class="metric-value" id="desp-qtd">—</div></div>
+        <div class="metric-card" style="grid-column:span 2"><div class="metric-label">Maior categoria</div><div class="metric-value" id="desp-cat" style="font-size:15px">—</div></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Valor</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-despesas"><tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLUXO DE CAIXA -->
+    <div class="page" id="page-fluxo">
+      <div class="page-header">
+        <div class="page-title">Fluxo de caixa</div>
+      </div>
+      <div class="filters-bar">
+        <input type="date" id="fluxo-ini" class="form-control" style="width:160px">
+        <input type="date" id="fluxo-fim" class="form-control" style="width:160px">
+        <button class="btn btn-primary" onclick="loadFluxo()">Gerar</button>
+      </div>
+      <div id="fluxo-resumo" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+      <div class="two-col-grid">
+        <div class="card">
+          <div class="card-title" style="color:var(--teal)">Entradas</div>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th style="text-align:right">Valor</th></tr></thead>
+          <tbody id="tbody-entradas"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color:var(--coral)">Saídas</div>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right">Valor</th></tr></thead>
+          <tbody id="tbody-saidas"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENCOMENDAS -->
+    <div class="page" id="page-encomendas">
+      <div class="page-header">
+        <div class="page-title">Encomendas</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="loadEncomendas('todas')">Ver todas</button>
+          <button class="btn btn-primary" onclick="openModal('modal-encomenda')">+ Nova encomenda</button>
+        </div>
+      </div>
+      <!-- Kanban -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px" id="kanban-board">
+        <div class="card" id="col-pedido">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--gray);flex-shrink:0"></div>
+            <div class="card-title" style="margin:0">Pedido</div>
+            <span class="badge badge-gray" id="cnt-pedido">0</span>
+          </div>
+          <div id="cards-pedido"></div>
+        </div>
+        <div class="card" id="col-producao">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--amber);flex-shrink:0"></div>
+            <div class="card-title" style="margin:0">Em produção</div>
+            <span class="badge badge-amber" id="cnt-producao">0</span>
+          </div>
+          <div id="cards-producao"></div>
+        </div>
+        <div class="card" id="col-pronto">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>
+            <div class="card-title" style="margin:0">Pronto</div>
+            <span class="badge badge-blue" id="cnt-pronto">0</span>
+          </div>
+          <div id="cards-pronto"></div>
+        </div>
+        <div class="card" id="col-entregue">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
+            <div class="card-title" style="margin:0">Entregue</div>
+            <span class="badge badge-green" id="cnt-entregue">0</span>
+          </div>
+          <div id="cards-entregue"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVIÇOS -->
+    <div class="page" id="page-servicos">
+      <div class="page-header">
+        <div class="page-title">Serviços</div>
+        <button class="btn btn-primary" onclick="openModal('modal-servico')">+ Novo serviço</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table><thead><tr><th>Nome</th><th>Categoria</th><th>Tipo de preço</th><th>Valor</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-servicos"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CALCULADORA IMPRESSÃO -->
+    <div class="page" id="page-impressao">
+      <div class="page-header">
+        <div class="page-title">Calculadora de impressão</div>
+        <button class="btn" onclick="openModal('modal-material')">+ Novo material</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+        <div class="card">
+          <div class="card-title">Configurar impressão</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Material</label>
+              <select id="imp-material" class="form-control" onchange="onMaterialChange()">
+                <option value="">Selecione o material...</option>
+              </select>
+            </div>
+            <div id="imp-m2-fields">
+              <div class="form-grid form-grid-2" style="gap:10px">
+                <div class="form-group">
+                  <label class="form-label">Largura (m)</label>
+                  <input type="number" id="imp-largura" class="form-control" value="1" step="0.01" oninput="calcularImpressao()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Altura (m)</label>
+                  <input type="number" id="imp-altura" class="form-control" value="1" step="0.01" oninput="calcularImpressao()">
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Quantidade</label>
+              <input type="number" id="imp-quantidade" class="form-control" value="1" min="1" oninput="calcularImpressao()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Acabamentos</label>
+              <div id="acabamentos-list" style="display:flex;flex-direction:column;gap:6px;margin-top:2px"></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="calc-box" style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--gray);margin-bottom:4px">Valor ao cliente</div>
+            <div class="calc-result" id="calc-total">R$ 0,00</div>
+            <div class="calc-detail" id="calc-detail">Selecione material e configure acima</div>
+          </div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-title">Detalhamento de custo</div>
+            <div id="calc-breakdown" style="font-size:13px;color:var(--text-muted)">—</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn-primary" onclick="adicionarItemPDVFromCalc()">Adicionar à venda</button>
+            <button class="btn" onclick="adicionarItemOrcFromCalc()">Adicionar ao orçamento</button>
+          </div>
+        </div>
+      </div>
+      <!-- Tabela de materiais cadastrados -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Materiais cadastrados</div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Material</th><th>Tipo</th><th>Preço venda</th><th>Custo</th><th>Margem</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-materiais"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="page" id="page-configuracoes">
+      <div class="page-header">
+        <div class="page-title">Configurações</div>
+      </div>
+      <div class="card" style="max-width:560px">
+        <div class="card-title">Dados da empresa</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Nome da empresa</label>
+            <input type="text" id="cfg-nome" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CNPJ</label>
+            <input type="text" id="cfg-cnpj" class="form-control">
+          </div>
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Telefone</label>
+              <input type="text" id="cfg-telefone" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" id="cfg-email" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Endereço</label>
+            <input type="text" id="cfg-endereco" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Validade padrão de orçamentos (dias)</label>
+            <input type="number" id="cfg-validade" class="form-control" value="7">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Logo da empresa (para PDFs)</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="file" id="logo-input" accept=".png,.jpg,.jpeg" style="flex:1;padding:6px 10px;border:0.5px solid var(--border);border-radius:8px;background:var(--bg);font-size:13px">
+              <button class="btn" onclick="uploadLogo()">Enviar logo</button>
+            </div>
+            <div id="logo-preview" style="margin-top:8px"></div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app -->
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- Modal Venda -->
+<div class="modal-overlay" id="modal-venda">
+  <div class="modal" style="width:660px">
+    <div class="modal-header">
+      <div class="modal-title">Nova venda</div>
+      <button class="modal-close" onclick="closeModal('modal-venda')">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Cliente (opcional)</label>
+          <input type="text" id="venda-cliente-nome" class="form-control" placeholder="Nome do cliente" list="clientes-list">
+          <datalist id="clientes-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select id="venda-tipo" class="form-control">
+            <option value="impressao">Impressão gráfica</option>
+            <option value="produto">Produto</option>
+            <option value="servico">Serviço</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="border:0.5px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:10px">Adicionar item</div>
+        <div class="form-grid form-grid-3" style="margin-bottom:8px">
+          <div class="form-group" style="grid-column:span 1">
+            <label class="form-label">Descrição</label>
+            <input type="text" id="vi-desc" class="form-control" placeholder="Ex: Banner 2x1m">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Qtd</label>
+            <input type="number" id="vi-qtd" class="form-control" value="1" min="0.01" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor unit. (R$)</label>
+            <input type="number" id="vi-preco" class="form-control" value="0" step="0.01">
+          </div>
+        </div>
+        <button class="btn btn-sm" onclick="adicionarItemVenda()">+ Adicionar item</button>
+        <button class="btn btn-sm" onclick="abrirCalcParaVenda()" style="margin-left:8px">🖨️ Calcular impressão</button>
+        <button class="btn btn-sm" onclick="toggleServicosSelector()" style="margin-left:8px">🔧 Serviços</button>
+        <div id="servicos-selector" style="display:none;margin-top:8px;border:0.5px solid var(--border);border-radius:8px;padding:10px;max-height:160px;overflow-y:auto">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Clique para adicionar serviço</div>
+          <div id="servicos-lista-pdv"></div>
+        </div>
+      </div>
+
+      <div class="items-list" id="venda-items-list" style="display:none">
+        <div id="venda-items-rows"></div>
+      </div>
+
+      <div class="totals-box" id="venda-totals">
+        <div class="total-row"><span>Subtotal</span><span id="venda-subtotal">R$ 0,00</span></div>
+        <div class="total-row">
+          <span>Desconto (R$)</span>
+          <input type="number" id="venda-desconto" class="form-control" style="width:90px" value="0" step="0.01" oninput="recalcVenda()">
+        </div>
+        <div class="total-row final"><span>TOTAL</span><span id="venda-total">R$ 0,00</span></div>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Forma de pagamento</label>
+          <select id="venda-pagamento" class="form-control">
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">PIX</option>
+            <option value="cartao_debito">Cartão débito</option>
+            <option value="cartao_credito">Cartão crédito</option>
+            <option value="fiado">Fiado / prazo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="venda-status" class="form-control">
+            <option value="pago">Pago</option>
+            <option value="pendente">Pendente</option>
+            <option value="fiado">Fiado</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="venda-obs" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-venda')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarVenda()">Registrar venda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Locação -->
+<div class="modal-overlay" id="modal-locacao">
+  <div class="modal" style="width:680px">
+    <div class="modal-header">
+      <div class="modal-title">Nova locação</div>
+      <button class="modal-close" onclick="closeModal('modal-locacao')">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <input type="text" id="loc-cliente" class="form-control" placeholder="Nome do cliente" list="clientes-list">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de locação</label>
+          <select id="loc-tipo" class="form-control">
+            <option value="item">Itens individuais</option>
+            <option value="kit">Kit</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Data de retirada *</label>
+          <input type="date" id="loc-retirada" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data de devolução *</label>
+          <input type="date" id="loc-devolucao" class="form-control" onchange="calcDiasLocacao()">
+        </div>
+      </div>
+
+      <div style="border:0.5px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:10px">
+          Adicionar item/kit — <span id="loc-dias-label" style="color:var(--purple)">0 dias</span>
+        </div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label class="form-label">Item / Kit</label>
+            <select id="loc-item-sel" class="form-control">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Quantidade</label>
+            <input type="number" id="loc-item-qtd" class="form-control" value="1" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Preço unit.</label>
+            <input type="number" id="loc-item-preco" class="form-control" value="0" step="0.01">
+          </div>
+        </div>
+        <button class="btn btn-sm" style="margin-top:8px" onclick="adicionarItemLocacao()">+ Adicionar</button>
+      </div>
+
+      <div class="items-list" id="loc-items-list" style="display:none">
+        <div id="loc-items-rows"></div>
+      </div>
+
+      <div class="totals-box">
+        <div class="total-row"><span>Subtotal</span><span id="loc-subtotal">R$ 0,00</span></div>
+        <div class="total-row">
+          <span>Desconto (R$)</span>
+          <input type="number" id="loc-desconto" class="form-control" style="width:90px" value="0" step="0.01" oninput="recalcLocacao()">
+        </div>
+        <div class="total-row final"><span>TOTAL</span><span id="loc-total">R$ 0,00</span></div>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Forma de pagamento</label>
+          <select id="loc-pagamento" class="form-control">
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">PIX</option>
+            <option value="cartao_debito">Cartão débito</option>
+            <option value="cartao_credito">Cartão crédito</option>
+            <option value="fiado">Fiado / prazo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observações</label>
+          <textarea id="loc-obs" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-locacao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLocacao()">Registrar locação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Orçamento -->
+<div class="modal-overlay" id="modal-orcamento">
+  <div class="modal" style="width:660px">
+    <div class="modal-header">
+      <div class="modal-title">Novo orçamento</div>
+      <button class="modal-close" onclick="closeModal('modal-orcamento')">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Cliente (opcional)</label>
+        <input type="text" id="orc-cliente" class="form-control" placeholder="Nome do cliente" list="clientes-list">
+      </div>
+      <div style="border:0.5px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:10px">Itens do orçamento</div>
+        <div class="form-grid form-grid-3" style="margin-bottom:8px">
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <input type="text" id="oi-desc" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Qtd</label>
+            <input type="number" id="oi-qtd" class="form-control" value="1" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor unit.</label>
+            <input type="number" id="oi-preco" class="form-control" value="0" step="0.01">
+          </div>
+        </div>
+        <button class="btn btn-sm" onclick="adicionarItemOrc()">+ Adicionar</button>
+        <button class="btn btn-sm" style="margin-left:8px" onclick="abrirCalcParaOrc()">🖨️ Calc. impressão</button>
+      </div>
+      <div class="items-list" id="orc-items-list" style="display:none">
+        <div id="orc-items-rows"></div>
+      </div>
+      <div class="totals-box">
+        <div class="total-row"><span>Subtotal</span><span id="orc-subtotal">R$ 0,00</span></div>
+        <div class="total-row">
+          <span>Desconto (R$)</span>
+          <input type="number" id="orc-desconto" class="form-control" style="width:90px" value="0" step="0.01" oninput="recalcOrc()">
+        </div>
+        <div class="total-row final"><span>TOTAL</span><span id="orc-total">R$ 0,00</span></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="orc-obs" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-orcamento')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarOrcamento()">Criar orçamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Cliente -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-cliente-title">Novo cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">×</button>
+    </div>
+    <input type="hidden" id="cliente-id">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input type="text" id="cliente-nome" class="form-control">
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Telefone</label>
+          <input type="text" id="cliente-telefone" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="cliente-email" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">CPF / CNPJ</label>
+        <input type="text" id="cliente-cpf" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Endereço</label>
+        <input type="text" id="cliente-endereco" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="cliente-obs" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Produto -->
+<div class="modal-overlay" id="modal-produto">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Produto / serviço</div>
+      <button class="modal-close" onclick="closeModal('modal-produto')">×</button>
+    </div>
+    <input type="hidden" id="produto-id">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input type="text" id="produto-nome" class="form-control">
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <input type="text" id="produto-categoria" class="form-control" placeholder="Ex: Adesivo, Serviço...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Preço de venda *</label>
+          <input type="number" id="produto-preco" class="form-control" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estoque</label>
+        <input type="number" id="produto-estoque" class="form-control" value="0">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-produto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Item Locação -->
+<div class="modal-overlay" id="modal-item-locacao">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Novo item para locação</div>
+      <button class="modal-close" onclick="closeModal('modal-item-locacao')">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input type="text" id="il-nome" class="form-control">
+      </div>
+      <div class="form-grid form-grid-3">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <input type="text" id="il-categoria" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Preço/diária *</label>
+          <input type="number" id="il-preco" class="form-control" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantidade total</label>
+          <input type="number" id="il-qtd" class="form-control" value="1">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-item-locacao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarItemLocacao()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Despesa -->
+<div class="modal-overlay" id="modal-despesa">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="desp-modal-title">Nova despesa</div>
+      <button class="modal-close" onclick="closeModal('modal-despesa')">×</button>
+    </div>
+    <input type="hidden" id="desp-id">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Descrição *</label>
+        <input type="text" id="desp-desc" class="form-control" placeholder="Ex: Compra de papel, aluguel...">
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select id="desp-cat" class="form-control">
+            <option value="material">Material/Insumo</option>
+            <option value="fornecedor">Fornecedor</option>
+            <option value="aluguel">Aluguel</option>
+            <option value="servico_terceiro">Serviço terceiro</option>
+            <option value="equipamento">Equipamento</option>
+            <option value="transporte">Transporte</option>
+            <option value="alimentacao">Alimentação</option>
+            <option value="geral">Geral</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$) *</label>
+          <input type="number" id="desp-valor" class="form-control" step="0.01">
+        </div>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Forma de pagamento</label>
+          <select id="desp-pag" class="form-control">
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">PIX</option>
+            <option value="cartao_debito">Cartão débito</option>
+            <option value="cartao_credito">Cartão crédito</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" id="desp-data" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="desp-obs" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-despesa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDespesa()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Encomenda -->
+<div class="modal-overlay" id="modal-encomenda">
+  <div class="modal" style="width:620px">
+    <div class="modal-header">
+      <div class="modal-title" id="enc-modal-title">Nova encomenda</div>
+      <button class="modal-close" onclick="closeModal('modal-encomenda')">×</button>
+    </div>
+    <input type="hidden" id="enc-id">
+    <div class="form-grid">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <input type="text" id="enc-cliente" class="form-control" list="clientes-list">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="enc-status" class="form-control">
+            <option value="pedido">Pedido</option>
+            <option value="producao">Em produção</option>
+            <option value="pronto">Pronto</option>
+            <option value="entregue">Entregue</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição do pedido *</label>
+        <textarea id="enc-desc" class="form-control" rows="3" placeholder="Descreva o que foi pedido, tamanhos, cores, material..."></textarea>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label class="form-label">Data de entrega</label>
+          <input type="date" id="enc-entrega" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor total (R$)</label>
+          <input type="number" id="enc-total" class="form-control" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações internas</label>
+        <textarea id="enc-obs" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-encomenda')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEncomenda()">Salvar encomenda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Serviço -->
+<div class="modal-overlay" id="modal-servico">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="srv-modal-title">Novo serviço</div>
+      <button class="modal-close" onclick="closeModal('modal-servico')">×</button>
+    </div>
+    <input type="hidden" id="srv-id">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input type="text" id="srv-nome" class="form-control">
+      </div>
+      <div class="form-grid form-grid-3">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <input type="text" id="srv-cat" class="form-control" placeholder="design, instalação...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de preço</label>
+          <select id="srv-tipo" class="form-control">
+            <option value="fixo">Preço fixo</option>
+            <option value="hora">Por hora</option>
+            <option value="unidade">Por unidade</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$) *</label>
+          <input type="number" id="srv-preco" class="form-control" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <textarea id="srv-desc" class="form-control" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-servico')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarServico()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Material -->
+<div class="modal-overlay" id="modal-material">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="mat-modal-title">Novo material de impressão</div>
+      <button class="modal-close" onclick="closeModal('modal-material')">×</button>
+    </div>
+    <input type="hidden" id="mat-id">
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input type="text" id="mat-nome" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de cobrança</label>
+        <select id="mat-tipo" class="form-control" onchange="toggleMatFields()">
+          <option value="m2">Por m² (lona, vinil, tecido)</option>
+          <option value="unidade">Por unidade (A4, folha)</option>
+        </select>
+      </div>
+      <div id="mat-m2-fields">
+        <div class="form-grid form-grid-2" style="gap:10px">
+          <div class="form-group">
+            <label class="form-label">Preço de venda/m² (R$)</label>
+            <input type="number" id="mat-preco-m2" class="form-control" step="0.01" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custo do material/m² (R$)</label>
+            <input type="number" id="mat-custo" class="form-control" step="0.01" value="0">
+          </div>
+        </div>
+      </div>
+      <div id="mat-unid-fields" style="display:none">
+        <div class="form-grid form-grid-2" style="gap:10px">
+          <div class="form-group">
+            <label class="form-label">Preço de venda/unidade (R$)</label>
+            <input type="number" id="mat-preco-unid" class="form-control" step="0.01" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custo/unidade (R$)</label>
+            <input type="number" id="mat-custo-unid" class="form-control" step="0.01" value="0">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Margem de lucro (%)</label>
+        <input type="number" id="mat-margem" class="form-control" step="1" value="50">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Preenchido automaticamente com base nos valores acima</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-material')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMaterial()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Kit -->
+<div class="modal-overlay" id="modal-kit">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Novo kit de locação</div>
+      <button class="modal-close" onclick="closeModal('modal-kit')">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Nome do kit *</label>
+        <input type="text" id="kit-nome" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preço total do kit *</label>
+        <input type="number" id="kit-preco" class="form-control" step="0.01">
+      </div>
+      <div id="kit-itens-form" style="border:0.5px solid var(--border);border-radius:8px;padding:14px">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Itens do kit</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select id="kit-item-sel" class="form-control" style="flex:1">
+            <option value="">Selecione item...</option>
+          </select>
+          <input type="number" id="kit-item-qtd" class="form-control" style="width:70px" value="1" min="1">
+          <button class="btn btn-sm" onclick="adicionarItemAoKit()">+</button>
+        </div>
+        <div id="kit-itens-lista"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-kit')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarKit()">Salvar kit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Histórico Cliente -->
+<div class="modal-overlay" id="modal-historico">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="hist-titulo">Histórico do cliente</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="hist-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-historico')">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px" id="hist-metricas"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-sm active" id="hist-tab-vendas" onclick="switchHistTab('vendas')">Vendas</button>
+      <button class="btn btn-sm" id="hist-tab-locacoes" onclick="switchHistTab('locacoes')">Locações</button>
+      <button class="btn btn-sm" id="hist-tab-orcamentos" onclick="switchHistTab('orcamentos')">Orçamentos</button>
+    </div>
+    <div id="hist-content" style="max-height:340px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:5000/api';
+let vendaItems = [], locItems = [], orcItems = [], kitItems = [];
+let callerContext = null;
+
+// ─── GLOBAL DATA STORE (avoids JSON in onclick attrs) ────────────────────────
+const _store = { clientes:{}, produtos:{}, despesas:{}, encomendas:{}, servicos:{}, materiais:{} };
+
+function editarClienteById(id) { editarCliente(_store.clientes[id]); }
+function editarProdutoById(id) { editarProduto(_store.produtos[id]); }
+function editarDespesaById(id) { editarDespesa(_store.despesas[id]); }
+function editarEncById(id)     { editarEncomenda(_store.encomendas[id]); }
+function editarServicoById(id) { editarServico(_store.servicos[id]); }
+function editarMaterialById(id){ editarMaterial(_store.materiais[id]); }
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+function navigateTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+  loadPage(page);
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => navigateTo(item.dataset.page));
+});
+
+function loadPage(page) {
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'pdv') loadVendas();
+  else if (page === 'locacoes') loadLocacoes('');
+  else if (page === 'orcamentos') loadOrcamentos();
+  else if (page === 'clientes') loadClientes();
+  else if (page === 'produtos') loadProdutos();
+  else if (page === 'itens-locacao') { loadItensLocacao(); loadKits(); }
+  else if (page === 'impressao') loadImpressaoPage();
+  else if (page === 'configuracoes') loadConfig();
+  else if (page === 'relatorios') initRelatorio();
+  else if (page === 'despesas') { initDespesasDates(); loadDespesas(); }
+  else if (page === 'fluxo') { initFluxoDates(); }
+  else if (page === 'encomendas') loadEncomendas('');
+  else if (page === 'servicos') loadServicos();
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────────
+function openModal(id) {
+  if (id === 'modal-venda') { vendaItems = []; renderVendaItems(); }
+  if (id === 'modal-locacao') { locItems = []; renderLocItems(); loadItensParaSelect(); }
+  if (id === 'modal-orcamento') { orcItems = []; renderOrcItems(); }
+  if (id === 'modal-cliente') { resetClienteForm(); }
+  if (id === 'modal-kit') { kitItems = []; renderKitItens(); loadItensParaKitSelect(); }
+  if (id === 'modal-despesa') {
+    document.getElementById('desp-id').value = '';
+    document.getElementById('desp-modal-title').textContent = 'Nova despesa';
+    document.getElementById('desp-data').value = new Date().toISOString().split('T')[0];
+    ['desp-desc','desp-obs'].forEach(f => document.getElementById(f).value='');
+    document.getElementById('desp-valor').value='';
+  }
+  if (id === 'modal-encomenda') {
+    document.getElementById('enc-id').value = '';
+    document.getElementById('enc-modal-title').textContent = 'Nova encomenda';
+    ['enc-cliente','enc-desc','enc-obs'].forEach(f => document.getElementById(f).value='');
+    document.getElementById('enc-total').value='0';
+    document.getElementById('enc-status').value='pedido';
+    document.getElementById('enc-entrega').value='';
+  }
+  if (id === 'modal-servico') { document.getElementById('srv-id').value=''; document.getElementById('srv-modal-title').textContent='Novo serviço'; ['srv-nome','srv-cat','srv-desc'].forEach(f=>document.getElementById(f).value=''); document.getElementById('srv-preco').value=''; }
+  if (id === 'modal-material') { document.getElementById('mat-id').value=''; document.getElementById('mat-modal-title').textContent='Novo material'; toggleMatFields(); }
+  loadClientesDatalist();
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// ─── FORMAT ───────────────────────────────────────────────────────────────────
+function brl(v) {
+  return new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'}).format(v||0);
+}
+function fmtDate(s) {
+  if (!s) return '';
+  // Handle both 'T' and space separators from SQLite
+  const dateOnly = s.split('T')[0].split(' ')[0];
+  const d = dateOnly.split('-');
+  return d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : s;
+}
+function statusBadge(s) {
+  const map = {
+    pago: ['badge-green', 'Pago'], pendente: ['badge-amber', 'Pendente'],
+    fiado: ['badge-amber', 'Fiado'], ativo: ['badge-green', 'Ativo'],
+    devolvido: ['badge-gray', 'Devolvido'], atrasado: ['badge-danger', 'Atrasado'],
+    aberto: ['badge-blue', 'Aberto'], aprovado: ['badge-green', 'Aprovado'],
+    recusado: ['badge-danger', 'Recusado'], cancelado: ['badge-gray', 'Cancelado'],
+  };
+  const [cls, label] = map[s] || ['badge-gray', s];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('pt-BR', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  try {
+    const d = await fetch(`${API}/dashboard`).then(r => r.json());
+    document.getElementById('m-receita').textContent = brl(d.receita_mes);
+    document.getElementById('m-vendas-hoje').textContent = brl(d.vendas_hoje_total);
+    document.getElementById('m-vendas-hoje-sub').textContent = `${d.vendas_hoje_count} pedidos`;
+    document.getElementById('m-locacoes').textContent = d.locacoes_ativas;
+    const locSub = document.getElementById('m-locacoes-sub');
+    if (d.locacoes_vencendo > 0) {
+      locSub.textContent = `${d.locacoes_vencendo} vence(m) em breve`;
+      locSub.className = 'metric-sub warn';
+    } else { locSub.textContent = 'nenhuma vencendo'; locSub.className = 'metric-sub'; }
+    document.getElementById('m-orcamentos').textContent = d.orcamentos_abertos;
+    // Saldo e despesas
+    const saldo = d.saldo_mes || 0;
+    document.getElementById('m-saldo').textContent = brl(saldo);
+    const saldoSub = document.getElementById('m-saldo-sub');
+    saldoSub.textContent = saldo >= 0 ? 'positivo' : 'negativo';
+    saldoSub.className = 'metric-sub ' + (saldo >= 0 ? 'up' : 'danger');
+    document.getElementById('m-saidas').textContent = brl(d.mes_saidas || 0);
+    // Encomendas
+    document.getElementById('m-encomendas').textContent = d.encomendas_pendentes || 0;
+    const encSub = document.getElementById('m-enc-sub');
+    if (d.encomendas_atrasadas > 0) {
+      encSub.textContent = d.encomendas_atrasadas + ' atrasada(s)!';
+      encSub.className = 'metric-sub danger';
+    } else { encSub.textContent = 'em andamento'; encSub.className = 'metric-sub'; }
+
+    // Bar chart
+    const cats = d.receita_categorias;
+    const maxVal = cats.reduce((m, c) => Math.max(m, c.total), 1);
+    const catNames = {impressao:'Impressão', produto:'Produtos', servico:'Serviços', locacao:'Locação', outro:'Outros'};
+    const catColors = {impressao:'var(--purple)', produto:'var(--teal)', servico:'var(--amber)', locacao:'var(--blue)', outro:'var(--gray)'};
+    document.getElementById('chart-categorias').innerHTML = cats.length ? cats.map(c => `
+      <div class="bar-row">
+        <div class="bar-label-text">${catNames[c.tipo]||c.tipo}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(c.total/maxVal*100)}%;background:${catColors[c.tipo]||'var(--purple)'}"></div></div>
+        <div class="bar-value">${brl(c.total)}</div>
+      </div>`).join('') : '<div style="color:var(--text-muted);font-size:13px">Sem dados no período</div>';
+
+    // Alertas de locação
+    renderAlertas(d.alertas_locacao, d.locacoes_atrasadas);
+
+    // Métrica locações — realça se há atrasadas
+    if (d.locacoes_atrasadas > 0) {
+      document.getElementById('m-locacoes-sub').textContent = `${d.locacoes_atrasadas} atrasada(s)!`;
+      document.getElementById('m-locacoes-sub').className = 'metric-sub danger';
+    }
+
+    // Movimentações
+    const movs = d.ultimas_movimentacoes;
+    document.getElementById('ultimas-movs').innerHTML = movs.length ? movs.map(m => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--border)">
+        <div>
+          <div style="font-size:13px">${m.cliente_nome||'Cliente não informado'}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${m.descricao}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:500">${brl(m.total)}</div>
+          ${statusBadge(m.status)}
+        </div>
+      </div>`).join('') : '<div style="color:var(--text-muted);font-size:13px">Nenhuma movimentação</div>';
+  } catch(e) {
+    console.error(e);
+    toast('Erro ao carregar dashboard. Backend rodando?', 'error');
+  }
+}
+
+// ─── VENDAS ───────────────────────────────────────────────────────────────────
+async function loadVendas() {
+  const ini = document.getElementById('pdv-data-ini')?.value || '';
+  const fim = document.getElementById('pdv-data-fim')?.value || '';
+  let url = `${API}/vendas`;
+  if (ini && fim) url += `?data_ini=${ini}&data_fim=${fim}`;
+  const rows = await fetch(url).then(r => r.json()).catch(() => []);
+  const tbody = document.getElementById('tbody-vendas');
+  tbody.innerHTML = rows.length ? rows.map(v => `
+    <tr>
+      <td>#${v.id}</td>
+      <td>${v.cliente_nome||'—'}</td>
+      <td>${v.tipo}</td>
+      <td>${v.forma_pagamento}</td>
+      <td style="font-weight:500">${brl(v.total)}</td>
+      <td>${statusBadge(v.status)}</td>
+      <td>${fmtDate(v.criado_em)}</td>
+      <td style="display:flex;gap:5px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="editarVendaById(${v.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirVenda(${v.id})">Excluir</button>
+        <button class="btn btn-sm" onclick="downloadPdfVenda(${v.id})">📄 Nota</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhuma venda encontrada</td></tr>';
+}
+
+function adicionarItemVenda() {
+  const desc = document.getElementById('vi-desc').value.trim();
+  const qtd = parseFloat(document.getElementById('vi-qtd').value) || 0;
+  const preco = parseFloat(document.getElementById('vi-preco').value) || 0;
+  if (!desc || qtd <= 0 || preco <= 0) { toast('Preencha descrição, qtd e valor', 'error'); return; }
+  vendaItems.push({ descricao: desc, quantidade: qtd, preco_unitario: preco, subtotal: qtd * preco });
+  document.getElementById('vi-desc').value = '';
+  document.getElementById('vi-qtd').value = '1';
+  document.getElementById('vi-preco').value = '0';
+  renderVendaItems();
+}
+
+function renderVendaItems() {
+  const list = document.getElementById('venda-items-list');
+  const rows = document.getElementById('venda-items-rows');
+  if (vendaItems.length === 0) { list.style.display = 'none'; recalcVenda(); return; }
+  list.style.display = 'block';
+  rows.innerHTML = vendaItems.map((it, i) => `
+    <div class="item-row">
+      <div class="item-desc">${it.descricao}</div>
+      <div style="font-size:12px;color:var(--text-muted)">${it.quantidade} × ${brl(it.preco_unitario)}</div>
+      <div class="item-sub">${brl(it.subtotal)}</div>
+      <button class="item-remove" onclick="removerItemVenda(${i})">×</button>
+    </div>`).join('');
+  recalcVenda();
+}
+
+function removerItemVenda(i) { vendaItems.splice(i, 1); renderVendaItems(); }
+
+function recalcVenda() {
+  const sub = vendaItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('venda-desconto').value) || 0;
+  document.getElementById('venda-subtotal').textContent = brl(sub);
+  document.getElementById('venda-total').textContent = brl(Math.max(0, sub - desc));
+}
+
+async function salvarVenda() {
+  if (vendaItems.length === 0) { toast('Adicione pelo menos um item', 'error'); return; }
+  const sub = vendaItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('venda-desconto').value) || 0;
+  const payload = {
+    cliente_nome: document.getElementById('venda-cliente-nome').value,
+    tipo: document.getElementById('venda-tipo').value,
+    subtotal: sub, desconto: desc, total: Math.max(0, sub - desc),
+    forma_pagamento: document.getElementById('venda-pagamento').value,
+    status: document.getElementById('venda-status').value,
+    obs: document.getElementById('venda-obs').value,
+    itens: vendaItems
+  };
+  const res = await fetch(`${API}/vendas`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    const v = await res.json();
+    toast('Venda registrada!', 'success');
+    closeModal('modal-venda');
+    loadVendas();
+    loadDashboard();
+  } else { toast('Erro ao salvar venda', 'error'); }
+}
+
+async function downloadPdfVenda(id) {
+  window.open(`${API}/vendas/${id}/pdf`, '_blank');
+}
+
+// ─── LOCAÇÕES ─────────────────────────────────────────────────────────────────
+async function loadLocacoes(status) {
+  const url = status ? `${API}/locacoes?status=${status}` : `${API}/locacoes`;
+  const rows = await fetch(url).then(r => r.json()).catch(() => []);
+  const tbody = document.getElementById('tbody-locacoes');
+  tbody.innerHTML = rows.length ? rows.map(l => `
+    <tr>
+      <td>#${l.id}</td>
+      <td>${l.cliente_nome}</td>
+      <td>${fmtDate(l.data_retirada)}</td>
+      <td>${fmtDate(l.data_devolucao)}</td>
+      <td style="font-weight:500">${brl(l.total)}</td>
+      <td>${statusBadge(l.status)}</td>
+      <td style="display:flex;gap:5px;flex-wrap:wrap">
+        ${l.status==='ativo' ? `<button class="btn btn-sm btn-success" onclick="devolverLocacao(${l.id})">Devolver</button>` : ''}
+        <button class="btn btn-sm" onclick="editarLocacaoById(${l.id})">Editar</button>
+        <button class="btn btn-sm" onclick="window.open('${API}/locacoes/${l.id}/pdf','_blank')">📄 PDF</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirLocacao(${l.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhuma locação</td></tr>';
+}
+
+async function loadItensParaSelect() {
+  const itens = await fetch(`${API}/itens-locacao`).then(r => r.json()).catch(() => []);
+  const kits = await fetch(`${API}/kits`).then(r => r.json()).catch(() => []);
+  const sel = document.getElementById('loc-item-sel');
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  if (itens.length) {
+    const og1 = document.createElement('optgroup'); og1.label = 'Itens individuais';
+    itens.forEach(it => { const o = document.createElement('option'); o.value=`item:${it.id}:${it.preco_diaria}`; o.textContent=it.nome; og1.appendChild(o); });
+    sel.appendChild(og1);
+  }
+  if (kits.length) {
+    const og2 = document.createElement('optgroup'); og2.label = 'Kits';
+    kits.forEach(k => { const o = document.createElement('option'); o.value=`kit:${k.id}:${k.preco_total}`; o.textContent=k.nome; og2.appendChild(o); });
+    sel.appendChild(og2);
+  }
+  sel.onchange = () => {
+    const parts = sel.value.split(':');
+    if (parts.length === 3) document.getElementById('loc-item-preco').value = parseFloat(parts[2]).toFixed(2);
+  };
+}
+
+function calcDiasLocacao() {
+  const r = document.getElementById('loc-retirada').value;
+  const d = document.getElementById('loc-devolucao').value;
+  if (r && d) {
+    const dias = Math.max(1, Math.round((new Date(d) - new Date(r)) / 86400000));
+    document.getElementById('loc-dias-label').textContent = `${dias} dia(s)`;
+    return dias;
+  }
+  return 1;
+}
+
+function adicionarItemLocacao() {
+  const sel = document.getElementById('loc-item-sel');
+  const parts = sel.value.split(':');
+  if (parts.length < 2) { toast('Selecione um item', 'error'); return; }
+  const tipo = parts[0], id = parseInt(parts[1]);
+  const qtd = parseInt(document.getElementById('loc-item-qtd').value) || 1;
+  const preco = parseFloat(document.getElementById('loc-item-preco').value) || 0;
+  const nome = sel.options[sel.selectedIndex].text;
+  const dias = calcDiasLocacao();
+  const sub = tipo === 'kit' ? preco * qtd : preco * qtd * dias;
+  locItems.push({ nome, [tipo==='kit'?'kit_id':'item_id']: id, quantidade: qtd, preco_unitario: preco, subtotal: sub });
+  renderLocItems();
+}
+
+function renderLocItems() {
+  const list = document.getElementById('loc-items-list');
+  const rows = document.getElementById('loc-items-rows');
+  if (locItems.length === 0) { list.style.display = 'none'; recalcLocacao(); return; }
+  list.style.display = 'block';
+  rows.innerHTML = locItems.map((it, i) => `
+    <div class="item-row">
+      <div class="item-desc">${it.nome}</div>
+      <div style="font-size:12px;color:var(--text-muted)">${it.quantidade} × ${brl(it.preco_unitario)}</div>
+      <div class="item-sub">${brl(it.subtotal)}</div>
+      <button class="item-remove" onclick="removerItemLoc(${i})">×</button>
+    </div>`).join('');
+  recalcLocacao();
+}
+
+function removerItemLoc(i) { locItems.splice(i, 1); renderLocItems(); }
+
+function recalcLocacao() {
+  const sub = locItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('loc-desconto').value) || 0;
+  document.getElementById('loc-subtotal').textContent = brl(sub);
+  document.getElementById('loc-total').textContent = brl(Math.max(0, sub - desc));
+}
+
+async function salvarLocacao() {
+  const cliente = document.getElementById('loc-cliente').value.trim();
+  if (!cliente) { toast('Informe o cliente', 'error'); return; }
+  if (locItems.length === 0) { toast('Adicione pelo menos um item', 'error'); return; }
+  const sub = locItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('loc-desconto').value) || 0;
+  const payload = {
+    cliente_nome: cliente,
+    tipo: document.getElementById('loc-tipo').value,
+    data_retirada: document.getElementById('loc-retirada').value,
+    data_devolucao: document.getElementById('loc-devolucao').value,
+    subtotal: sub, desconto: desc, total: Math.max(0, sub - desc),
+    forma_pagamento: document.getElementById('loc-pagamento').value,
+    obs: document.getElementById('loc-obs').value,
+    itens: locItems
+  };
+  const res = await fetch(`${API}/locacoes`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Locação registrada!', 'success'); closeModal('modal-locacao'); loadLocacoes(''); }
+  else { toast('Erro ao salvar locação', 'error'); }
+}
+
+async function devolverLocacao(id) {
+  if (!confirm('Confirmar devolução desta locação?')) return;
+  await fetch(`${API}/locacoes/${id}/status`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'devolvido'})});
+  toast('Locação devolvida!', 'success');
+  loadLocacoes('');
+}
+
+// ─── ORÇAMENTOS ───────────────────────────────────────────────────────────────
+async function loadOrcamentos() {
+  const rows = await fetch(`${API}/orcamentos`).then(r => r.json()).catch(() => []);
+  const tbody = document.getElementById('tbody-orcamentos');
+  tbody.innerHTML = rows.length ? rows.map(o => `
+    <tr>
+      <td><strong>${o.numero}</strong></td>
+      <td>${o.cliente_nome||'—'}</td>
+      <td>${fmtDate(o.validade)}</td>
+      <td style="font-weight:500">${brl(o.total)}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="window.open('${API}/orcamentos/${o.id}/pdf','_blank')">📄 PDF</button>
+        ${o.status==='aberto'?`<button class="btn btn-sm btn-success" onclick="aprovarOrc(${o.id})">Aprovar</button>`:''}
+        <button class="btn btn-sm" onclick="editarOrcamentoById(${o.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirOrcamento(${o.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhum orçamento</td></tr>';
+}
+
+function adicionarItemOrc() {
+  const desc = document.getElementById('oi-desc').value.trim();
+  const qtd = parseFloat(document.getElementById('oi-qtd').value) || 0;
+  const preco = parseFloat(document.getElementById('oi-preco').value) || 0;
+  if (!desc || qtd <= 0 || preco <= 0) { toast('Preencha todos os campos', 'error'); return; }
+  orcItems.push({ descricao: desc, quantidade: qtd, preco_unitario: preco, subtotal: qtd * preco });
+  document.getElementById('oi-desc').value = '';
+  document.getElementById('oi-qtd').value = '1';
+  document.getElementById('oi-preco').value = '0';
+  renderOrcItems();
+}
+
+function renderOrcItems() {
+  const list = document.getElementById('orc-items-list');
+  const rows = document.getElementById('orc-items-rows');
+  if (orcItems.length === 0) { list.style.display = 'none'; recalcOrc(); return; }
+  list.style.display = 'block';
+  rows.innerHTML = orcItems.map((it, i) => `
+    <div class="item-row">
+      <div class="item-desc">${it.descricao}</div>
+      <div style="font-size:12px;color:var(--text-muted)">${it.quantidade} × ${brl(it.preco_unitario)}</div>
+      <div class="item-sub">${brl(it.subtotal)}</div>
+      <button class="item-remove" onclick="removerItemOrc(${i})">×</button>
+    </div>`).join('');
+  recalcOrc();
+}
+
+function removerItemOrc(i) { orcItems.splice(i, 1); renderOrcItems(); }
+
+function recalcOrc() {
+  const sub = orcItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('orc-desconto').value) || 0;
+  document.getElementById('orc-subtotal').textContent = brl(sub);
+  document.getElementById('orc-total').textContent = brl(Math.max(0, sub - desc));
+}
+
+async function salvarOrcamento() {
+  if (orcItems.length === 0) { toast('Adicione pelo menos um item', 'error'); return; }
+  const sub = orcItems.reduce((s, i) => s + i.subtotal, 0);
+  const desc = parseFloat(document.getElementById('orc-desconto').value) || 0;
+  const payload = {
+    cliente_nome: document.getElementById('orc-cliente').value,
+    subtotal: sub, desconto: desc, total: Math.max(0, sub - desc),
+    obs: document.getElementById('orc-obs').value,
+    itens: orcItems
+  };
+  const res = await fetch(`${API}/orcamentos`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Orçamento criado!', 'success'); closeModal('modal-orcamento'); loadOrcamentos(); }
+  else { toast('Erro ao criar orçamento', 'error'); }
+}
+
+async function aprovarOrc(id) {
+  await fetch(`${API}/orcamentos/${id}/status`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'aprovado'})});
+  toast('Orçamento aprovado!', 'success'); loadOrcamentos();
+}
+
+// ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
+function initRelatorio() {
+  const hoje = new Date().toISOString().split('T')[0];
+  const ini = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+  document.getElementById('rel-ini').value = ini;
+  document.getElementById('rel-fim').value = hoje;
+}
+
+async function loadRelatorio() {
+  const ini = document.getElementById('rel-ini').value;
+  const fim = document.getElementById('rel-fim').value;
+  const d = await fetch(`${API}/relatorios/resumo?data_ini=${ini}&data_fim=${fim}`).then(r => r.json()).catch(() => null);
+  if (!d) { toast('Erro ao carregar relatório', 'error'); return; }
+  const fmtPeriodo = `${fmtDate(d.periodo.inicio)} a ${fmtDate(d.periodo.fim)}`;
+  const tipoLabels = {impressao:'Impressão',produto:'Produto',servico:'Serviço',locacao:'Locação',outro:'Outros'};
+  const pagLabels = {dinheiro:'Dinheiro',pix:'PIX',cartao_debito:'Cartão Débito',cartao_credito:'Cartão Crédito',fiado:'Fiado'};
+  document.getElementById('relatorio-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="metric-card"><div class="metric-label">Receita total (pagas)</div><div class="metric-value">${brl(d.total_receita)}</div></div>
+      <div class="metric-card"><div class="metric-label">Período</div><div class="metric-value" style="font-size:14px">${fmtPeriodo}</div></div>
+      <div class="metric-card"><div class="metric-label">Categorias de venda</div><div class="metric-value">${d.vendas_por_tipo.length}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="card-title">Vendas por tipo</div>
+        ${d.vendas_por_tipo.map(v=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+            <span>${tipoLabels[v.tipo]||v.tipo}</span>
+            <span style="font-weight:500">${brl(v.total)} (${v.qtd}x)</span>
+          </div>`).join('') || '<div style="color:var(--text-muted);font-size:13px">Sem dados</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">Formas de pagamento</div>
+        ${d.formas_pagamento.map(p=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+            <span>${pagLabels[p.forma_pagamento]||p.forma_pagamento}</span>
+            <span style="font-weight:500">${brl(p.total)} (${p.qtd}x)</span>
+          </div>`).join('') || '<div style="color:var(--text-muted);font-size:13px">Sem dados</div>'}
+      </div>
+      <div class="card">
+        <div class="card-title">Locações</div>
+        ${d.locacoes_por_status.map(l=>`
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+            <span>${statusBadge(l.status)}</span>
+            <span style="font-weight:500">${brl(l.total)} (${l.qtd}x)</span>
+          </div>`).join('') || '<div style="color:var(--text-muted);font-size:13px">Sem dados</div>'}
+      </div>
+    </div>`;
+}
+
+// ─── CLIENTES ─────────────────────────────────────────────────────────────────
+async function loadClientes() {
+  const q = document.getElementById('q-clientes')?.value || '';
+  const rows = await fetch(`${API}/clientes?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => []);
+  const tbody = document.getElementById('tbody-clientes');
+  rows.forEach(c => _store.clientes[c.id] = c);
+  tbody.innerHTML = rows.length ? rows.map(c => `
+    <tr>
+      <td>${c.nome}</td>
+      <td>${c.telefone||'—'}</td>
+      <td>${c.email||'—'}</td>
+      <td>${c.cpf_cnpj||'—'}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="_store.clientes[${c.id}]&&editarClienteById(${c.id})">Editar</button>
+        <button class="btn btn-sm" style="color:var(--purple)" onclick="verHistoricoCliente(${c.id})">Histórico</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhum cliente cadastrado</td></tr>';
+}
+
+async function loadClientesDatalist() {
+  const rows = await fetch(`${API}/clientes`).then(r => r.json()).catch(() => []);
+  const dl = document.getElementById('clientes-list');
+  if (dl) dl.innerHTML = rows.map(c => `<option value="${c.nome}">`).join('');
+}
+
+function resetClienteForm() {
+  document.getElementById('cliente-id').value = '';
+  document.getElementById('modal-cliente-title').textContent = 'Novo cliente';
+  ['nome','telefone','email','cpf','endereco','obs'].forEach(f => {
+    const el = document.getElementById('cliente-' + f); if (el) el.value = '';
+  });
+}
+
+function editarCliente(c) {
+  document.getElementById('cliente-id').value = c.id;
+  document.getElementById('modal-cliente-title').textContent = 'Editar cliente';
+  document.getElementById('cliente-nome').value = c.nome || '';
+  document.getElementById('cliente-telefone').value = c.telefone || '';
+  document.getElementById('cliente-email').value = c.email || '';
+  document.getElementById('cliente-cpf').value = c.cpf_cnpj || '';
+  document.getElementById('cliente-endereco').value = c.endereco || '';
+  document.getElementById('cliente-obs').value = c.obs || '';
+  document.getElementById('modal-cliente').classList.add('open');
+}
+
+async function salvarCliente() {
+  const nome = document.getElementById('cliente-nome').value.trim();
+  if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+  const id = document.getElementById('cliente-id').value;
+  const payload = {
+    nome, telefone: document.getElementById('cliente-telefone').value,
+    email: document.getElementById('cliente-email').value,
+    cpf_cnpj: document.getElementById('cliente-cpf').value,
+    endereco: document.getElementById('cliente-endereco').value,
+    obs: document.getElementById('cliente-obs').value,
+  };
+  const url = id ? `${API}/clientes/${id}` : `${API}/clientes`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Cliente salvo!', 'success'); closeModal('modal-cliente'); loadClientes(); }
+  else { toast('Erro ao salvar cliente', 'error'); }
+}
+
+// ─── PRODUTOS ─────────────────────────────────────────────────────────────────
+async function loadProdutos() {
+  const rows = await fetch(`${API}/produtos`).then(r => r.json()).catch(() => []);
+  rows.forEach(p => _store.produtos[p.id] = p);
+  const tbody = document.getElementById('tbody-produtos');
+  tbody.innerHTML = rows.length ? rows.map(p => `
+    <tr>
+      <td>${p.nome}</td>
+      <td>${p.categoria||'—'}</td>
+      <td style="font-weight:500">${brl(p.preco_venda)}</td>
+      <td>${p.estoque}</td>
+      <td style="display:flex;gap:5px">
+        <button class="btn btn-sm" onclick="editarProdutoById(${p.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirProduto(${p.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhum produto cadastrado</td></tr>';
+}
+
+function editarProduto(p) {
+  document.getElementById('produto-id').value = p.id;
+  document.getElementById('produto-nome').value = p.nome;
+  document.getElementById('produto-categoria').value = p.categoria||'';
+  document.getElementById('produto-preco').value = p.preco_venda;
+  document.getElementById('produto-estoque').value = p.estoque;
+  document.getElementById('modal-produto').classList.add('open');
+}
+
+async function salvarProduto() {
+  const nome = document.getElementById('produto-nome').value.trim();
+  const preco = parseFloat(document.getElementById('produto-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e preço', 'error'); return; }
+  const id = document.getElementById('produto-id').value;
+  const payload = { nome, categoria: document.getElementById('produto-categoria').value, preco_venda: preco, estoque: parseInt(document.getElementById('produto-estoque').value)||0 };
+  const url = id ? `${API}/produtos/${id}` : `${API}/produtos`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Produto salvo!', 'success'); closeModal('modal-produto'); loadProdutos(); }
+  else { toast('Erro ao salvar produto', 'error'); }
+}
+
+// ─── ITENS LOCAÇÃO ────────────────────────────────────────────────────────────
+async function loadItensLocacao() {
+  const rows = await fetch(`${API}/itens-locacao`).then(r => r.json()).catch(() => []);
+  const tbody = document.getElementById('tbody-itens-locacao');
+  tbody.innerHTML = rows.length ? rows.map(it => `
+    <tr>
+      <td>${it.nome}</td>
+      <td>${it.categoria||'—'}</td>
+      <td>${brl(it.preco_diaria)}/dia</td>
+      <td>${it.quantidade_total}</td>
+      <td style="display:flex;gap:5px">
+        <button class="btn btn-sm" onclick="editarItemLocacaoById(${it.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirItemLocacao(${it.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted)">Nenhum item</td></tr>';
+}
+
+async function loadKits() {
+  const kits = await fetch(`${API}/kits`).then(r => r.json()).catch(() => []);
+  const el = document.getElementById('lista-kits');
+  el.innerHTML = kits.length ? kits.map(k => `
+    <div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;font-weight:500">${k.nome}</div>
+        <div style="font-size:13px;color:var(--purple);font-weight:500">${brl(k.preco_total)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+        ${(k.itens||[]).map(i => `${i.quantidade}× ${i.nome}`).join(', ')}
+      </div>
+      <div style="display:flex;gap:5px;margin-top:6px">
+        <button class="btn btn-sm" onclick="editarKitById(${k.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirKit(${k.id})">Excluir</button>
+      </div>
+    </div>`).join('') : '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Nenhum kit cadastrado</div>';
+}
+
+async function salvarItemLocacao() {
+  const nome = document.getElementById('il-nome').value.trim();
+  const preco = parseFloat(document.getElementById('il-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e preço', 'error'); return; }
+  const payload = { nome, categoria: document.getElementById('il-categoria').value, preco_diaria: preco, quantidade_total: parseInt(document.getElementById('il-qtd').value)||1 };
+  const res = await fetch(`${API}/itens-locacao`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Item salvo!', 'success'); closeModal('modal-item-locacao'); loadItensLocacao(); }
+  else { toast('Erro ao salvar item', 'error'); }
+}
+
+async function loadItensParaKitSelect() {
+  const itens = await fetch(`${API}/itens-locacao`).then(r => r.json()).catch(() => []);
+  const sel = document.getElementById('kit-item-sel');
+  sel.innerHTML = '<option value="">Selecione item...</option>';
+  itens.forEach(it => { const o = document.createElement('option'); o.value=`${it.id}:${it.nome}`; o.textContent=it.nome; sel.appendChild(o); });
+}
+
+function adicionarItemAoKit() {
+  const sel = document.getElementById('kit-item-sel');
+  const parts = sel.value.split(':');
+  if (parts.length < 2) { toast('Selecione um item', 'error'); return; }
+  const qtd = parseInt(document.getElementById('kit-item-qtd').value) || 1;
+  kitItems.push({ item_id: parseInt(parts[0]), nome: parts[1], quantidade: qtd });
+  renderKitItens();
+}
+
+function renderKitItens() {
+  document.getElementById('kit-itens-lista').innerHTML = kitItems.map((it, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+      <span style="flex:1">${it.quantidade}× ${it.nome}</span>
+      <button class="item-remove" onclick="kitItems.splice(${i},1);renderKitItens()">×</button>
+    </div>`).join('');
+}
+
+async function salvarKit() {
+  const nome = document.getElementById('kit-nome').value.trim();
+  const preco = parseFloat(document.getElementById('kit-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e preço', 'error'); return; }
+  const payload = { nome, preco_total: preco, itens: kitItems };
+  const res = await fetch(`${API}/kits`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Kit salvo!', 'success'); closeModal('modal-kit'); loadKits(); }
+  else { toast('Erro ao salvar kit', 'error'); }
+}
+
+// ─── CALCULADORA IMPRESSÃO ───────────────────────────────────────────────────
+let materiaisCache = [], acabamentosCache = [];
+
+
+
+function abrirCalcParaVenda() { callerContext = 'venda'; navigateTo('impressao'); }
+function abrirCalcParaOrc() { callerContext = 'orc'; navigateTo('impressao'); }
+
+function adicionarItemPDVFromCalc() {
+  if (!window._lastCalcResult) { toast('Calcule primeiro', 'error'); return; }
+  const r = window._lastCalcResult;
+  if (callerContext === 'orc') {
+    orcItems.push({ descricao: r.descricao, quantidade: 1, preco_unitario: r.total, subtotal: r.total });
+    renderOrcItems();
+    navigateTo('orcamentos'); openModal('modal-orcamento');
+  } else {
+    vendaItems.push({ descricao: r.descricao, quantidade: 1, preco_unitario: r.total, subtotal: r.total });
+    renderVendaItems();
+    navigateTo('pdv'); openModal('modal-venda');
+  }
+  callerContext = null;
+}
+function adicionarItemOrcFromCalc() { callerContext = 'orc'; adicionarItemPDVFromCalc(); }
+
+// ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────────
+async function loadConfig() {
+  const cfg = await fetch(`${API}/configuracoes`).then(r => r.json()).catch(() => ({}));
+  document.getElementById('cfg-nome').value = cfg.empresa_nome || '';
+  document.getElementById('cfg-cnpj').value = cfg.empresa_cnpj || '';
+  document.getElementById('cfg-telefone').value = cfg.empresa_telefone || '';
+  document.getElementById('cfg-email').value = cfg.empresa_email || '';
+  document.getElementById('cfg-endereco').value = cfg.empresa_endereco || '';
+  document.getElementById('cfg-validade').value = cfg.orcamento_validade_dias || '7';
+  carregarPreviewLogo();
+}
+
+async function salvarConfig() {
+  const payload = {
+    empresa_nome: document.getElementById('cfg-nome').value,
+    empresa_cnpj: document.getElementById('cfg-cnpj').value,
+    empresa_telefone: document.getElementById('cfg-telefone').value,
+    empresa_email: document.getElementById('cfg-email').value,
+    empresa_endereco: document.getElementById('cfg-endereco').value,
+    orcamento_validade_dias: document.getElementById('cfg-validade').value,
+  };
+  const res = await fetch(`${API}/configuracoes`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) toast('Configurações salvas!', 'success');
+  else toast('Erro ao salvar', 'error');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+loadDashboard();
+
+// Default dates for PDV filter
+const hoje = new Date().toISOString().split('T')[0];
+const ini = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+document.getElementById('pdv-data-ini').value = ini;
+document.getElementById('pdv-data-fim').value = hoje;
+
+
+// ─── DESPESAS ────────────────────────────────────────────────────────────────
+function initDespesasDates() {
+  const hoje = new Date().toISOString().split('T')[0];
+  const ini = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+  if (!document.getElementById('desp-ini').value) {
+    document.getElementById('desp-ini').value = ini;
+    document.getElementById('desp-fim').value = hoje;
+  }
+}
+
+async function loadDespesas() {
+  initDespesasDates();
+  const ini = document.getElementById('desp-ini').value;
+  const fim = document.getElementById('desp-fim').value;
+  const rows = await fetch(`${API}/despesas?data_ini=${ini}&data_fim=${fim}`).then(r=>r.json()).catch(()=>[]);
+  rows.forEach(d => _store.despesas[d.id] = d);
+  const tbody = document.getElementById('tbody-despesas');
+  const catLabels = {material:'Material',fornecedor:'Fornecedor',aluguel:'Aluguel',servico_terceiro:'Serv. terceiro',equipamento:'Equipamento',transporte:'Transporte',alimentacao:'Alimentação',geral:'Geral'};
+  tbody.innerHTML = rows.length ? rows.map(d => `
+    <tr>
+      <td>${fmtDate(d.data)}</td>
+      <td>${d.descricao}</td>
+      <td><span class="badge badge-gray">${catLabels[d.categoria]||d.categoria}</span></td>
+      <td>${d.forma_pagamento}</td>
+      <td style="font-weight:500;color:var(--coral)">- ${brl(d.valor)}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="editarDespesaById(${d.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="deletarDespesa(${d.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhuma despesa no período</td></tr>';
+  const total = rows.reduce((s,r) => s+r.valor, 0);
+  document.getElementById('desp-total').textContent = brl(total);
+  document.getElementById('desp-qtd').textContent = rows.length;
+  if (rows.length) {
+    const cats = {};
+    rows.forEach(r => cats[r.categoria] = (cats[r.categoria]||0) + r.valor);
+    const top = Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
+    document.getElementById('desp-cat').textContent = `${catLabels[top[0]]||top[0]}: ${brl(top[1])}`;
+  }
+}
+
+function editarDespesa(d) {
+  document.getElementById('desp-id').value = d.id;
+  document.getElementById('desp-modal-title').textContent = 'Editar despesa';
+  document.getElementById('desp-desc').value = d.descricao;
+  document.getElementById('desp-cat').value = d.categoria;
+  document.getElementById('desp-valor').value = d.valor;
+  document.getElementById('desp-pag').value = d.forma_pagamento;
+  document.getElementById('desp-data').value = d.data;
+  document.getElementById('desp-obs').value = d.obs||'';
+  document.getElementById('modal-despesa').classList.add('open');
+}
+
+async function salvarDespesa() {
+  const desc = document.getElementById('desp-desc').value.trim();
+  const valor = parseFloat(document.getElementById('desp-valor').value);
+  if (!desc || !valor) { toast('Preencha descrição e valor','error'); return; }
+  const id = document.getElementById('desp-id').value;
+  const payload = {
+    descricao: desc, categoria: document.getElementById('desp-cat').value,
+    valor, forma_pagamento: document.getElementById('desp-pag').value,
+    data: document.getElementById('desp-data').value,
+    obs: document.getElementById('desp-obs').value
+  };
+  const url = id ? `${API}/despesas/${id}` : `${API}/despesas`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Despesa salva!','success');
+    closeModal('modal-despesa');
+    document.getElementById('desp-id').value = '';
+    document.getElementById('desp-modal-title').textContent = 'Nova despesa';
+    loadDespesas();
+  } else toast('Erro ao salvar','error');
+}
+
+async function deletarDespesa(id) {
+  if (!confirm('Excluir esta despesa?')) return;
+  await fetch(`${API}/despesas/${id}`, {method:'DELETE'});
+  toast('Despesa excluída','success'); loadDespesas();
+}
+
+// ─── FLUXO DE CAIXA ──────────────────────────────────────────────────────────
+function initFluxoDates() {
+  const hoje = new Date().toISOString().split('T')[0];
+  const ini = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+  document.getElementById('fluxo-ini').value = ini;
+  document.getElementById('fluxo-fim').value = hoje;
+}
+
+async function loadFluxo() {
+  const ini = document.getElementById('fluxo-ini').value;
+  const fim = document.getElementById('fluxo-fim').value;
+  const d = await fetch(`${API}/fluxo-caixa?data_ini=${ini}&data_fim=${fim}`).then(r=>r.json()).catch(()=>null);
+  if (!d) { toast('Erro ao carregar fluxo','error'); return; }
+  const saldoCor = d.saldo >= 0 ? 'var(--teal)' : 'var(--coral)';
+  document.getElementById('fluxo-resumo').innerHTML = `
+    <div class="metric-card"><div class="metric-label">Total entradas</div><div class="metric-value" style="color:var(--teal)">${brl(d.total_entradas)}</div></div>
+    <div class="metric-card"><div class="metric-label">Total saídas</div><div class="metric-value" style="color:var(--coral)">${brl(d.total_saidas)}</div></div>
+    <div class="metric-card"><div class="metric-label">Saldo</div><div class="metric-value" style="color:${saldoCor}">${brl(d.saldo)}</div></div>`;
+  const tipoLabels={impressao:'Impressão',produto:'Produto',servico:'Serviço',locacao:'Locação',outro:'Outros'};
+  document.getElementById('tbody-entradas').innerHTML = d.entradas.length
+    ? d.entradas.map(e=>`<tr><td>${fmtDate(e.data)}</td><td>${e.descricao||'—'}</td><td>${tipoLabels[e.categoria]||e.categoria}</td><td style="text-align:right;font-weight:500;color:var(--teal)">${brl(e.valor)}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">Sem entradas</td></tr>';
+  document.getElementById('tbody-saidas').innerHTML = d.saidas.length
+    ? d.saidas.map(s=>`<tr><td>${fmtDate(s.data)}</td><td>${s.descricao}</td><td>${s.categoria}</td><td style="text-align:right;font-weight:500;color:var(--coral)">- ${brl(s.valor)}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">Sem saídas</td></tr>';
+}
+
+// ─── ENCOMENDAS ──────────────────────────────────────────────────────────────
+const STATUS_ENC = ['pedido','producao','pronto','entregue'];
+const STATUS_ENC_NEXT = {pedido:'producao', producao:'pronto', pronto:'entregue'};
+const STATUS_ENC_LABEL = {pedido:'Pedido',producao:'Em produção',pronto:'Pronto',entregue:'Entregue'};
+
+async function loadEncomendas(filtro) {
+  const url = filtro === 'todas' ? `${API}/encomendas/todas` : `${API}/encomendas`;
+  const rows = await fetch(url).then(r=>r.json()).catch(()=>[]);
+  rows.forEach(e => _store.encomendas[e.id] = e);
+  STATUS_ENC.forEach(s => {
+    document.getElementById('cards-'+s).innerHTML = '';
+    document.getElementById('cnt-'+s).textContent = '0';
+  });
+  const counts = {pedido:0,producao:0,pronto:0,entregue:0};
+  rows.forEach(e => {
+    const col = document.getElementById('cards-' + e.status);
+    if (!col) return;
+    counts[e.status] = (counts[e.status]||0)+1;
+    const hoje = new Date().toISOString().split('T')[0];
+    const atrasada = e.data_entrega && e.data_entrega < hoje && e.status !== 'entregue';
+    const prazoLabel = e.data_entrega ? `Entrega: ${fmtDate(e.data_entrega)}` : 'Sem prazo';
+    const prazoColor = atrasada ? 'var(--coral)' : (e.data_entrega === hoje ? 'var(--amber)' : 'var(--text-muted)');
+    const nextStatus = STATUS_ENC_NEXT[e.status];
+    col.innerHTML += `
+      <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;${atrasada?'border-left:3px solid var(--coral);':''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:500;color:var(--purple)">${e.numero}</span>
+          ${e.total > 0 ? `<span style="font-size:11px;font-weight:500">${brl(e.total)}</span>` : ''}
+        </div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:3px">${e.cliente_nome}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;line-height:1.4">${e.descricao.length>80?e.descricao.slice(0,80)+'...':e.descricao}</div>
+        <div style="font-size:11px;color:${prazoColor};margin-bottom:8px">${prazoLabel}${atrasada?' ⚠ ATRASADA':''}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          ${nextStatus ? `<button class="btn btn-sm btn-success" style="font-size:11px" onclick="avancarEncomenda(${e.id},'${nextStatus}')">→ ${STATUS_ENC_LABEL[nextStatus]}</button>` : ''}
+          <button class="btn btn-sm" style="font-size:11px" onclick="editarEncById(${e.id})">Editar</button>
+        </div>
+      </div>`;
+  });
+  STATUS_ENC.forEach(s => { document.getElementById('cnt-'+s).textContent = counts[s]||0; });
+}
+
+async function avancarEncomenda(id, novoStatus) {
+  await fetch(`${API}/encomendas/${id}/status`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:novoStatus})});
+  toast(`Encomenda → ${STATUS_ENC_LABEL[novoStatus]}`,'success');
+  loadEncomendas('');
+}
+
+function editarEncomenda(e) {
+  document.getElementById('enc-id').value = e.id;
+  document.getElementById('enc-modal-title').textContent = 'Editar encomenda';
+  document.getElementById('enc-cliente').value = e.cliente_nome;
+  document.getElementById('enc-desc').value = e.descricao;
+  document.getElementById('enc-status').value = e.status;
+  document.getElementById('enc-entrega').value = e.data_entrega||'';
+  document.getElementById('enc-total').value = e.total||0;
+  document.getElementById('enc-obs').value = e.obs||'';
+  document.getElementById('modal-encomenda').classList.add('open');
+}
+
+async function salvarEncomenda() {
+  const cliente = document.getElementById('enc-cliente').value.trim();
+  const desc = document.getElementById('enc-desc').value.trim();
+  if (!cliente || !desc) { toast('Cliente e descrição são obrigatórios','error'); return; }
+  const id = document.getElementById('enc-id').value;
+  const payload = {
+    cliente_nome: cliente, descricao: desc,
+    status: document.getElementById('enc-status').value,
+    data_entrega: document.getElementById('enc-entrega').value,
+    total: parseFloat(document.getElementById('enc-total').value)||0,
+    obs: document.getElementById('enc-obs').value
+  };
+  const url = id ? `${API}/encomendas/${id}` : `${API}/encomendas`;
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Encomenda salva!','success');
+    closeModal('modal-encomenda');
+    document.getElementById('enc-id').value = '';
+    document.getElementById('enc-modal-title').textContent = 'Nova encomenda';
+    loadEncomendas('');
+  } else toast('Erro ao salvar','error');
+}
+
+// ─── SERVIÇOS ────────────────────────────────────────────────────────────────
+async function loadServicos() {
+  const rows = await fetch(`${API}/servicos`).then(r=>r.json()).catch(()=>[]);
+  rows.forEach(s => _store.servicos[s.id] = s);
+  const tbody = document.getElementById('tbody-servicos');
+  const tipoLabel = {fixo:'Preço fixo',hora:'Por hora',unidade:'Por unidade'};
+  tbody.innerHTML = rows.length ? rows.map(s=>`
+    <tr>
+      <td style="font-weight:500">${s.nome}</td>
+      <td>${s.categoria||'—'}</td>
+      <td>${tipoLabel[s.tipo_preco]||s.tipo_preco}</td>
+      <td>${brl(s.preco)}${s.tipo_preco==='hora'?'/h':s.tipo_preco==='unidade'?'/un':''}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="editarServicoById(${s.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="deletarServico(${s.id})">Excluir</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="5" style="padding:32px;text-align:center;color:var(--text-muted)">Nenhum serviço cadastrado</td></tr>';
+}
+
+function editarServico(s) {
+  document.getElementById('srv-id').value = s.id;
+  document.getElementById('srv-modal-title').textContent = 'Editar serviço';
+  document.getElementById('srv-nome').value = s.nome;
+  document.getElementById('srv-cat').value = s.categoria||'';
+  document.getElementById('srv-tipo').value = s.tipo_preco;
+  document.getElementById('srv-preco').value = s.preco;
+  document.getElementById('srv-desc').value = s.descricao||'';
+  document.getElementById('modal-servico').classList.add('open');
+}
+
+async function salvarServico() {
+  const nome = document.getElementById('srv-nome').value.trim();
+  const preco = parseFloat(document.getElementById('srv-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e valor','error'); return; }
+  const id = document.getElementById('srv-id').value;
+  const payload = {nome, categoria:document.getElementById('srv-cat').value, tipo_preco:document.getElementById('srv-tipo').value, preco, descricao:document.getElementById('srv-desc').value};
+  const url = id ? `${API}/servicos/${id}` : `${API}/servicos`;
+  const res = await fetch(url, {method: id?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Serviço salvo!','success'); closeModal('modal-servico'); document.getElementById('srv-id').value=''; loadServicos(); }
+  else toast('Erro ao salvar','error');
+}
+
+async function deletarServico(id) {
+  if (!confirm('Excluir este serviço?')) return;
+  await fetch(`${API}/servicos/${id}`, {method:'DELETE'});
+  toast('Serviço excluído','success'); loadServicos();
+}
+
+// ─── CALCULADORA REFORMULADA ─────────────────────────────────────────────────
+function onMaterialChange() {
+  const sel = document.getElementById('imp-material');
+  const opt = sel.options[sel.selectedIndex];
+  const tipo = opt.dataset.tipo || 'm2';
+  document.getElementById('imp-m2-fields').style.display = tipo === 'm2' ? '' : 'none';
+  calcularImpressao();
+}
+
+function toggleMatFields() {
+  const tipo = document.getElementById('mat-tipo').value;
+  document.getElementById('mat-m2-fields').style.display = tipo === 'm2' ? '' : 'none';
+  document.getElementById('mat-unid-fields').style.display = tipo === 'unidade' ? '' : 'none';
+}
+
+async function loadImpressaoPage() {
+  materiaisCache = await fetch(`${API}/materiais`).then(r=>r.json()).catch(()=>[]);
+  acabamentosCache = await fetch(`${API}/acabamentos`).then(r=>r.json()).catch(()=>[]);
+  materiaisCache.forEach(m => _store.materiais[m.id] = m);
+  const sel = document.getElementById('imp-material');
+  sel.innerHTML = '<option value="">Selecione o material...</option>';
+  const m2 = materiaisCache.filter(m=>(!m.tipo||m.tipo==='m2'));
+  const unid = materiaisCache.filter(m=>m.tipo==='unidade');
+  if (m2.length) {
+    const og = document.createElement('optgroup'); og.label = 'Por m² (lona, vinil...)';
+    m2.forEach(m => { const o=document.createElement('option'); o.value=m.id; o.dataset.tipo='m2'; o.textContent=`${m.nome} — R$${m.preco_m2}/m²`; og.appendChild(o); });
+    sel.appendChild(og);
+  }
+  if (unid.length) {
+    const og = document.createElement('optgroup'); og.label = 'Por unidade (folha, A4...)';
+    unid.forEach(m => { const o=document.createElement('option'); o.value=m.id; o.dataset.tipo='unidade'; o.textContent=`${m.nome} — R$${m.preco_unidade}/un`; og.appendChild(o); });
+    sel.appendChild(og);
+  }
+  const acList = document.getElementById('acabamentos-list');
+  acList.innerHTML = acabamentosCache.map(a=>`
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox" value="${a.id}" onchange="calcularImpressao()" style="width:14px;height:14px">
+      ${a.nome} (+${brl(a.preco_unitario)}/un)
+    </label>`).join('');
+  // Load materials table
+  const tbody = document.getElementById('tbody-materiais');
+  tbody.innerHTML = materiaisCache.map(m=>`
+    <tr>
+      <td style="font-weight:500">${m.nome}</td>
+      <td><span class="badge badge-purple">${m.tipo==='unidade'?'Por unidade':'Por m²'}</span></td>
+      <td>${m.tipo==='unidade'?brl(m.preco_unidade)+'/un':brl(m.preco_m2)+'/m²'}</td>
+      <td style="color:var(--text-muted)">${m.tipo==='unidade'?brl(m.custo_material||0)+'/un':brl(m.custo_material||0)+'/m²'}</td>
+      <td>${m.margem_lucro||0}%</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="editarMaterialById(${m.id})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="deletarMaterial(${m.id})">Excluir</button>
+      </td>
+    </tr>`).join('');
+}
+
+function editarMaterial(m) {
+  document.getElementById('mat-id').value = m.id;
+  document.getElementById('mat-modal-title').textContent = 'Editar material';
+  document.getElementById('mat-nome').value = m.nome;
+  document.getElementById('mat-tipo').value = m.tipo||'m2';
+  document.getElementById('mat-preco-m2').value = m.preco_m2||0;
+  document.getElementById('mat-custo').value = m.custo_material||0;
+  document.getElementById('mat-preco-unid').value = m.preco_unidade||0;
+  document.getElementById('mat-custo-unid').value = m.custo_material||0;
+  document.getElementById('mat-margem').value = m.margem_lucro||50;
+  toggleMatFields();
+  document.getElementById('modal-material').classList.add('open');
+}
+
+async function salvarMaterial() {
+  const nome = document.getElementById('mat-nome').value.trim();
+  if (!nome) { toast('Informe o nome','error'); return; }
+  const tipo = document.getElementById('mat-tipo').value;
+  const id = document.getElementById('mat-id').value;
+  const payload = {
+    nome, tipo,
+    preco_m2: parseFloat(document.getElementById('mat-preco-m2').value)||0,
+    custo_material: parseFloat(tipo==='unidade' ? document.getElementById('mat-custo-unid').value : document.getElementById('mat-custo').value)||0,
+    margem_lucro: parseFloat(document.getElementById('mat-margem').value)||50,
+    preco_unidade: parseFloat(document.getElementById('mat-preco-unid').value)||0,
+  };
+  const url = id ? `${API}/materiais/${id}` : `${API}/materiais`;
+  const res = await fetch(url, {method:id?'PUT':'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) { toast('Material salvo!','success'); closeModal('modal-material'); document.getElementById('mat-id').value=''; loadImpressaoPage(); }
+  else toast('Erro ao salvar','error');
+}
+
+async function deletarMaterial(id) {
+  if (!confirm('Excluir este material?')) return;
+  await fetch(`${API}/materiais/${id}`, {method:'DELETE'});
+  toast('Material excluído','success'); loadImpressaoPage();
+}
+
+async function calcularImpressao() {
+  const matId = document.getElementById('imp-material').value;
+  if (!matId) { document.getElementById('calc-detail').textContent = 'Selecione o material'; return; }
+  const largura = parseFloat(document.getElementById('imp-largura')?.value)||0;
+  const altura = parseFloat(document.getElementById('imp-altura')?.value)||0;
+  const qtd = parseInt(document.getElementById('imp-quantidade').value)||1;
+  const acIds = [...document.querySelectorAll('#acabamentos-list input:checked')].map(i=>parseInt(i.value));
+  const payload = {largura, altura, material_id:parseInt(matId), quantidade:qtd, acabamentos:acIds};
+  const r = await fetch(`${API}/calcular-impressao`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  document.getElementById('calc-total').textContent = brl(r.total);
+  document.getElementById('calc-detail').textContent = r.descricao;
+  const acStr = r.acabamentos.length ? r.acabamentos.map(a=>`<div style="display:flex;justify-content:space-between"><span>${a.nome}</span><span>${brl(a.valor)}</span></div>`).join('') : '';
+  document.getElementById('calc-breakdown').innerHTML = `
+    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border)"><span>Preço base</span><span style="font-weight:500">${brl(r.preco_base)}</span></div>
+    ${acStr ? `<div style="padding:4px 0;border-bottom:0.5px solid var(--border)">${acStr}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border)"><span>Custo estimado</span><span style="color:var(--coral)">${brl(r.custo_total)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:500"><span>Lucro estimado</span><span style="color:var(--teal)">${brl(r.lucro_estimado)} (${r.margem_pct}%)</span></div>`;
+  window._lastCalcResult = r;
+}
+
+// ─── STORE WRAPPERS — NOVOS MÓDULOS ──────────────────────────────────────────
+function editarVendaById(id)       { if(_store.vendas&&_store.vendas[id]) abrirEditarVenda(_store.vendas[id]); }
+function editarLocacaoById(id)     { if(_store.locacoes&&_store.locacoes[id]) abrirEditarLocacao(_store.locacoes[id]); }
+function editarOrcamentoById(id)   { if(_store.orcamentos&&_store.orcamentos[id]) abrirEditarOrcamento(_store.orcamentos[id]); }
+function editarKitById(id)         { if(_store.kits&&_store.kits[id]) abrirEditarKit(_store.kits[id]); }
+function editarItemLocacaoById(id) { if(_store.itensLoc&&_store.itensLoc[id]) abrirEditarItemLocacao(_store.itensLoc[id]); }
+
+// ─── VENDA: EDITAR + EXCLUIR ─────────────────────────────────────────────────
+async function abrirEditarVenda(v) {
+  const itens = await fetch(`${API}/vendas/${v.id}/itens`).then(r=>r.json()).catch(()=>[]);
+  vendaItems = itens.map(i=>({descricao:i.descricao,quantidade:i.quantidade,preco_unitario:i.preco_unitario,subtotal:i.subtotal}));
+  document.getElementById('venda-cliente-nome').value = v.cliente_nome||'';
+  document.getElementById('venda-tipo').value = v.tipo||'venda';
+  document.getElementById('venda-pagamento').value = v.forma_pagamento||'dinheiro';
+  document.getElementById('venda-status').value = v.status||'pago';
+  document.getElementById('venda-obs').value = v.obs||'';
+  document.getElementById('venda-desconto').value = v.desconto||0;
+  renderVendaItems();
+  // Store editing id
+  document.getElementById('modal-venda').dataset.editId = v.id;
+  document.querySelector('#modal-venda .modal-title').textContent = `Editar venda #${v.id}`;
+  document.getElementById('modal-venda').classList.add('open');
+}
+
+async function excluirVenda(id) {
+  if (!confirm('Excluir esta venda? Esta ação não pode ser desfeita.')) return;
+  const res = await fetch(`${API}/vendas/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Venda excluída','success'); loadVendas(); loadDashboard(); }
+  else toast('Erro ao excluir','error');
+}
+
+// Patch salvarVenda to handle edit mode
+const _salvarVendaOriginal = salvarVenda;
+salvarVenda = async function() {
+  const editId = document.getElementById('modal-venda').dataset.editId;
+  if (!editId) { await _salvarVendaOriginal(); return; }
+  if (vendaItems.length === 0) { toast('Adicione pelo menos um item','error'); return; }
+  const sub = vendaItems.reduce((s,i)=>s+i.subtotal,0);
+  const desc = parseFloat(document.getElementById('venda-desconto').value)||0;
+  const payload = {
+    cliente_nome: document.getElementById('venda-cliente-nome').value,
+    tipo: document.getElementById('venda-tipo').value,
+    subtotal: sub, desconto: desc, total: Math.max(0,sub-desc),
+    forma_pagamento: document.getElementById('venda-pagamento').value,
+    status: document.getElementById('venda-status').value,
+    obs: document.getElementById('venda-obs').value,
+    itens: vendaItems
+  };
+  const res = await fetch(`${API}/vendas/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Venda atualizada!','success');
+    delete document.getElementById('modal-venda').dataset.editId;
+    document.querySelector('#modal-venda .modal-title').textContent = 'Nova venda';
+    closeModal('modal-venda'); loadVendas(); loadDashboard();
+  } else toast('Erro ao atualizar venda','error');
+};
+
+// ─── LOCAÇÃO: EDITAR + EXCLUIR ────────────────────────────────────────────────
+async function abrirEditarLocacao(l) {
+  const itens = await fetch(`${API}/locacoes/${l.id}/itens`).then(r=>r.json()).catch(()=>[]);
+  locItems = itens.map(i=>({nome:i.nome,item_id:i.item_id,kit_id:i.kit_id,quantidade:i.quantidade,preco_unitario:i.preco_unitario,subtotal:i.subtotal}));
+  document.getElementById('loc-cliente').value = l.cliente_nome||'';
+  document.getElementById('loc-tipo').value = l.tipo||'item';
+  document.getElementById('loc-retirada').value = l.data_retirada||'';
+  document.getElementById('loc-devolucao').value = l.data_devolucao||'';
+  document.getElementById('loc-pagamento').value = l.forma_pagamento||'dinheiro';
+  document.getElementById('loc-obs').value = l.obs||'';
+  document.getElementById('loc-desconto').value = l.desconto||0;
+  await loadItensParaSelect();
+  renderLocItems();
+  document.getElementById('modal-locacao').dataset.editId = l.id;
+  document.querySelector('#modal-locacao .modal-title').textContent = `Editar locação #${l.id}`;
+  document.getElementById('modal-locacao').classList.add('open');
+}
+
+async function excluirLocacao(id) {
+  if (!confirm('Excluir esta locação? Esta ação não pode ser desfeita.')) return;
+  const res = await fetch(`${API}/locacoes/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Locação excluída','success'); loadLocacoes(''); loadDashboard(); }
+  else toast('Erro ao excluir','error');
+}
+
+const _salvarLocacaoOriginal = salvarLocacao;
+salvarLocacao = async function() {
+  const editId = document.getElementById('modal-locacao').dataset.editId;
+  if (!editId) { await _salvarLocacaoOriginal(); return; }
+  const cliente = document.getElementById('loc-cliente').value.trim();
+  if (!cliente || locItems.length===0) { toast('Cliente e itens são obrigatórios','error'); return; }
+  const sub = locItems.reduce((s,i)=>s+i.subtotal,0);
+  const desc = parseFloat(document.getElementById('loc-desconto').value)||0;
+  const payload = {
+    cliente_nome: cliente, tipo: document.getElementById('loc-tipo').value,
+    data_retirada: document.getElementById('loc-retirada').value,
+    data_devolucao: document.getElementById('loc-devolucao').value,
+    subtotal: sub, desconto: desc, total: Math.max(0,sub-desc),
+    forma_pagamento: document.getElementById('loc-pagamento').value,
+    obs: document.getElementById('loc-obs').value, itens: locItems
+  };
+  const res = await fetch(`${API}/locacoes/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Locação atualizada!','success');
+    delete document.getElementById('modal-locacao').dataset.editId;
+    document.querySelector('#modal-locacao .modal-title').textContent = 'Nova locação';
+    closeModal('modal-locacao'); loadLocacoes(''); loadDashboard();
+  } else toast('Erro ao atualizar','error');
+};
+
+// ─── ORÇAMENTO: EDITAR + EXCLUIR ─────────────────────────────────────────────
+async function abrirEditarOrcamento(o) {
+  const itens = await fetch(`${API}/orcamentos/${o.id}/itens`).then(r=>r.json()).catch(()=>[]);
+  orcItems = itens.map(i=>({descricao:i.descricao,quantidade:i.quantidade,preco_unitario:i.preco_unitario,subtotal:i.subtotal}));
+  document.getElementById('orc-cliente').value = o.cliente_nome||'';
+  document.getElementById('orc-obs').value = o.obs||'';
+  document.getElementById('orc-desconto').value = o.desconto||0;
+  renderOrcItems();
+  document.getElementById('modal-orcamento').dataset.editId = o.id;
+  document.querySelector('#modal-orcamento .modal-title').textContent = `Editar orçamento ${o.numero}`;
+  document.getElementById('modal-orcamento').classList.add('open');
+}
+
+async function excluirOrcamento(id) {
+  if (!confirm('Excluir este orçamento?')) return;
+  const res = await fetch(`${API}/orcamentos/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Orçamento excluído','success'); loadOrcamentos(); }
+  else toast('Erro ao excluir','error');
+}
+
+const _salvarOrcamentoOriginal = salvarOrcamento;
+salvarOrcamento = async function() {
+  const editId = document.getElementById('modal-orcamento').dataset.editId;
+  if (!editId) { await _salvarOrcamentoOriginal(); return; }
+  if (orcItems.length===0) { toast('Adicione pelo menos um item','error'); return; }
+  const sub = orcItems.reduce((s,i)=>s+i.subtotal,0);
+  const desc = parseFloat(document.getElementById('orc-desconto').value)||0;
+  const payload = {
+    cliente_nome: document.getElementById('orc-cliente').value,
+    subtotal: sub, desconto: desc, total: Math.max(0,sub-desc),
+    obs: document.getElementById('orc-obs').value, itens: orcItems
+  };
+  const res = await fetch(`${API}/orcamentos/${editId}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Orçamento atualizado!','success');
+    delete document.getElementById('modal-orcamento').dataset.editId;
+    document.querySelector('#modal-orcamento .modal-title').textContent = 'Novo orçamento';
+    closeModal('modal-orcamento'); loadOrcamentos();
+  } else toast('Erro ao atualizar','error');
+};
+
+// ─── KIT: EDITAR + EXCLUIR ───────────────────────────────────────────────────
+async function abrirEditarKit(k) {
+  kitItems = (k.itens||[]).map(i=>({item_id:i.item_id||i.id,nome:i.nome,quantidade:i.quantidade}));
+  document.getElementById('kit-nome').value = k.nome||'';
+  document.getElementById('kit-preco').value = k.preco_total||0;
+  renderKitItens();
+  await loadItensParaKitSelect();
+  document.getElementById('modal-kit').dataset.editId = k.id;
+  document.querySelector('#modal-kit .modal-title').textContent = 'Editar kit';
+  document.getElementById('modal-kit').classList.add('open');
+}
+
+async function excluirKit(id) {
+  if (!confirm('Excluir este kit?')) return;
+  const res = await fetch(`${API}/kits/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Kit excluído','success'); loadKits(); }
+  else toast('Erro ao excluir','error');
+}
+
+const _salvarKitOriginal = salvarKit;
+salvarKit = async function() {
+  const editId = document.getElementById('modal-kit').dataset.editId;
+  const nome = document.getElementById('kit-nome').value.trim();
+  const preco = parseFloat(document.getElementById('kit-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e preço','error'); return; }
+  const payload = {nome, preco_total:preco, itens:kitItems};
+  const url = editId ? `${API}/kits/${editId}` : `${API}/kits`;
+  const method = editId ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Kit salvo!','success');
+    delete document.getElementById('modal-kit').dataset.editId;
+    document.querySelector('#modal-kit .modal-title').textContent = 'Novo kit de locação';
+    closeModal('modal-kit'); loadKits();
+  } else toast('Erro ao salvar kit','error');
+};
+
+// ─── ITEM DE LOCAÇÃO: EDITAR + EXCLUIR ───────────────────────────────────────
+async function abrirEditarItemLocacao(it) {
+  document.getElementById('il-nome').value = it.nome||'';
+  document.getElementById('il-categoria').value = it.categoria||'';
+  document.getElementById('il-preco').value = it.preco_diaria||0;
+  document.getElementById('il-qtd').value = it.quantidade_total||1;
+  document.getElementById('modal-item-locacao').dataset.editId = it.id;
+  document.querySelector('#modal-item-locacao .modal-title').textContent = 'Editar item';
+  document.getElementById('modal-item-locacao').classList.add('open');
+}
+
+async function excluirItemLocacao(id) {
+  if (!confirm('Excluir este item?')) return;
+  const res = await fetch(`${API}/itens-locacao/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Item excluído','success'); loadItensLocacao(); }
+  else toast('Erro ao excluir','error');
+}
+
+const _salvarItemLocOriginal = salvarItemLocacao;
+salvarItemLocacao = async function() {
+  const editId = document.getElementById('modal-item-locacao').dataset.editId;
+  const nome = document.getElementById('il-nome').value.trim();
+  const preco = parseFloat(document.getElementById('il-preco').value);
+  if (!nome || !preco) { toast('Preencha nome e preço','error'); return; }
+  const payload = {nome, categoria:document.getElementById('il-categoria').value, preco_diaria:preco, quantidade_total:parseInt(document.getElementById('il-qtd').value)||1};
+  const url = editId ? `${API}/itens-locacao/${editId}` : `${API}/itens-locacao`;
+  const method = editId ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if (res.ok) {
+    toast('Item salvo!','success');
+    delete document.getElementById('modal-item-locacao').dataset.editId;
+    document.querySelector('#modal-item-locacao .modal-title').textContent = 'Novo item para locação';
+    closeModal('modal-item-locacao'); loadItensLocacao();
+  } else toast('Erro ao salvar','error');
+};
+
+// ─── PRODUTO: EXCLUIR ─────────────────────────────────────────────────────────
+async function excluirProduto(id) {
+  if (!confirm('Excluir este produto?')) return;
+  const res = await fetch(`${API}/produtos/${id}`, {method:'DELETE'});
+  if (res.ok) { toast('Produto excluído','success'); loadProdutos(); }
+  else toast('Erro ao excluir','error');
+}
+
+// ─── RELATÓRIO: EXPORTAR PDF ─────────────────────────────────────────────────
+function exportarRelatorio() {
+  const ini = document.getElementById('rel-ini').value;
+  const fim = document.getElementById('rel-fim').value;
+  window.open(`${API}/relatorios/exportar?data_ini=${ini}&data_fim=${fim}`, '_blank');
+}
+
+// ─── SERVIÇOS NO PDV ──────────────────────────────────────────────────────────
+let _servicosPDV = [];
+
+async function toggleServicosSelector() {
+  const el = document.getElementById('servicos-selector');
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? '' : 'none';
+  if (isHidden && _servicosPDV.length === 0) {
+    _servicosPDV = await fetch(`${API}/servicos`).then(r=>r.json()).catch(()=>[]);
+    const tipoLabel = {fixo:'fixo',hora:'/h',unidade:'/un'};
+    document.getElementById('servicos-lista-pdv').innerHTML = _servicosPDV.length
+      ? _servicosPDV.map(s=>`
+        <div onclick="adicionarServicoPDV(${s.id})" style="padding:7px 10px;border-radius:6px;cursor:pointer;margin-bottom:3px;background:var(--bg2);display:flex;justify-content:space-between;align-items:center"
+             onmouseover="this.style.background='var(--purple-light)'" onmouseout="this.style.background='var(--bg2)'">
+          <div>
+            <div style="font-size:13px;font-weight:500">${s.nome}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${s.categoria||''}</div>
+          </div>
+          <div style="font-size:13px;font-weight:500;color:var(--purple)">${brl(s.preco)}${tipoLabel[s.tipo_preco]||''}</div>
+        </div>`).join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">Nenhum serviço cadastrado</div>';
+  }
+}
+
+function adicionarServicoPDV(id) {
+  const s = _servicosPDV.find(x=>x.id===id);
+  if (!s) return;
+  vendaItems.push({descricao:s.nome,quantidade:1,preco_unitario:s.preco,subtotal:s.preco});
+  renderVendaItems();
+  document.getElementById('venda-tipo').value = 'servico';
+  document.getElementById('servicos-selector').style.display = 'none';
+  toast(`${s.nome} adicionado`,'success');
+}
+
+// ─── PATCH LOAD FUNCTIONS — populate stores ───────────────────────────────────
+// Patch loadVendas to store data
+const _loadVendasOriginal = loadVendas;
+loadVendas = async function() {
+  await _loadVendasOriginal();
+  // Re-fetch and store
+  const ini = document.getElementById('pdv-data-ini')?.value||'';
+  const fim = document.getElementById('pdv-data-fim')?.value||'';
+  let url = `${API}/vendas`;
+  if (ini && fim) url += `?data_ini=${ini}&data_fim=${fim}`;
+  const rows = await fetch(url).then(r=>r.json()).catch(()=>[]);
+  if (!_store.vendas) _store.vendas = {};
+  rows.forEach(v => _store.vendas[v.id] = v);
+};
+
+// Patch loadLocacoes to store data
+const _loadLocacoesOriginal = loadLocacoes;
+loadLocacoes = async function(status) {
+  await _loadLocacoesOriginal(status);
+  const url = status ? `${API}/locacoes?status=${status}` : `${API}/locacoes`;
+  const rows = await fetch(url).then(r=>r.json()).catch(()=>[]);
+  if (!_store.locacoes) _store.locacoes = {};
+  rows.forEach(l => _store.locacoes[l.id] = l);
+};
+
+// Patch loadOrcamentos to store data
+const _loadOrcamentosOriginal = loadOrcamentos;
+loadOrcamentos = async function() {
+  await _loadOrcamentosOriginal();
+  const rows = await fetch(`${API}/orcamentos`).then(r=>r.json()).catch(()=>[]);
+  if (!_store.orcamentos) _store.orcamentos = {};
+  rows.forEach(o => _store.orcamentos[o.id] = o);
+};
+
+// Patch loadKits to store data
+const _loadKitsOriginal = loadKits;
+loadKits = async function() {
+  await _loadKitsOriginal();
+  const kits = await fetch(`${API}/kits`).then(r=>r.json()).catch(()=>[]);
+  if (!_store.kits) _store.kits = {};
+  kits.forEach(k => _store.kits[k.id] = k);
+};
+
+// Patch loadItensLocacao to store data
+const _loadItensLocOriginal = loadItensLocacao;
+loadItensLocacao = async function() {
+  await _loadItensLocOriginal();
+  const rows = await fetch(`${API}/itens-locacao`).then(r=>r.json()).catch(()=>[]);
+  if (!_store.itensLoc) _store.itensLoc = {};
+  rows.forEach(it => _store.itensLoc[it.id] = it);
+};
+
+// ─── PATCH openModal — reset edit state on new ───────────────────────────────
+const _openModalOriginal = openModal;
+openModal = function(id) {
+  // Clear edit mode when opening for new record
+  const editableModals = ['modal-venda','modal-locacao','modal-orcamento','modal-kit','modal-item-locacao'];
+  if (editableModals.includes(id)) {
+    const el = document.getElementById(id);
+    if (el) {
+      delete el.dataset.editId;
+      const titleEl = el.querySelector('.modal-title');
+      const defaultTitles = {
+        'modal-venda':'Nova venda','modal-locacao':'Nova locação',
+        'modal-orcamento':'Novo orçamento','modal-kit':'Novo kit de locação',
+        'modal-item-locacao':'Novo item para locação'
+      };
+      if (titleEl && defaultTitles[id]) titleEl.textContent = defaultTitles[id];
+    }
+  }
+  _openModalOriginal(id);
+};
+
+// ─── PATCH loadRelatorio — show export button ─────────────────────────────────
+const _loadRelatorioOriginal = loadRelatorio;
+loadRelatorio = async function() {
+  await _loadRelatorioOriginal();
+  const btn = document.getElementById('btn-export-rel');
+  if (btn) btn.style.display = '';
+};
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ─── ALERTAS DE LOCAÇÃO ─────────────────────────────────────────────────────
+function renderAlertas(alertas, atrasadas) {
+  const painel = document.getElementById('painel-alertas');
+  const lista = document.getElementById('alertas-lista');
+  if (!alertas || alertas.length === 0) { painel.style.display = 'none'; return; }
+  painel.style.display = 'block';
+  const urgLabels = { atrasada: ['badge-danger','Atrasada'], hoje: ['badge-amber','Devolução hoje'], em_breve: ['badge-amber','Vence em breve'] };
+  lista.innerHTML = alertas.map(a => {
+    const [cls, label] = urgLabels[a.urgencia] || ['badge-gray', a.urgencia];
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div>
+        <span style="font-weight:500">${a.cliente_nome}</span>
+        <span style="color:var(--text-muted);margin-left:8px;font-size:12px">Devolução: ${fmtDate(a.data_devolucao)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:500">${brl(a.total)}</span>
+        <span class="badge ${cls}">${label}</span>
+        <button class="btn btn-sm" onclick="navigateTo('locacoes')">Ver</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── HISTÓRICO DO CLIENTE ────────────────────────────────────────────────────
+let _histData = {};
+
+async function verHistoricoCliente(id) {
+  const cli = _store.clientes[id];
+  const nome = cli ? cli.nome : 'Cliente';
+  document.getElementById('hist-titulo').textContent = nome;
+  document.getElementById('hist-sub').textContent = 'Carregando...';
+  document.getElementById('hist-metricas').innerHTML = '';
+  document.getElementById('hist-content').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted)">Carregando...</div>';
+  document.getElementById('modal-historico').classList.add('open');
+  const d = await fetch(`${API}/clientes/${id}/historico`).then(r => r.json()).catch(() => null);
+  if (!d) { document.getElementById('hist-sub').textContent = 'Erro ao carregar'; return; }
+  _histData = d;
+  document.getElementById('hist-sub').textContent = `${d.total_transacoes} transações · cliente desde ${fmtDate(d.cliente.criado_em)}`;
+  document.getElementById('hist-metricas').innerHTML = `
+    <div class="metric-card"><div class="metric-label">Total gasto</div><div class="metric-value" style="font-size:18px">${brl(d.total_gasto)}</div></div>
+    <div class="metric-card"><div class="metric-label">Vendas</div><div class="metric-value" style="font-size:18px">${d.vendas.length}</div></div>
+    <div class="metric-card"><div class="metric-label">Locações</div><div class="metric-value" style="font-size:18px">${d.locacoes.length}</div></div>`;
+  switchHistTab('vendas');
+}
+
+function switchHistTab(tab) {
+  ['vendas','locacoes','orcamentos'].forEach(t => {
+    const btn = document.getElementById('hist-tab-' + t);
+    if (btn) btn.style.background = t === tab ? 'var(--purple-light)' : '';
+    if (btn) btn.style.color = t === tab ? 'var(--purple)' : '';
+  });
+  const d = _histData;
+  const el = document.getElementById('hist-content');
+  if (tab === 'vendas') {
+    el.innerHTML = d.vendas.length ? `<table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="background:var(--bg2)"><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Tipo</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Pagamento</th><th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-muted)">Total</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Status</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Data</th></tr></thead>
+      <tbody>${d.vendas.map(v => `<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:8px 10px">${v.tipo}</td><td style="padding:8px 10px">${v.forma_pagamento}</td><td style="padding:8px 10px;text-align:right;font-weight:500">${brl(v.total)}</td><td style="padding:8px 10px">${statusBadge(v.status)}</td><td style="padding:8px 10px;color:var(--text-muted)">${fmtDate(v.criado_em)}</td></tr>`).join('')}</tbody>
+    </table>` : '<div style="padding:24px;text-align:center;color:var(--text-muted)">Nenhuma venda encontrada</div>';
+  } else if (tab === 'locacoes') {
+    el.innerHTML = d.locacoes.length ? `<table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="background:var(--bg2)"><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Retirada</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Devolução</th><th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-muted)">Total</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Status</th></tr></thead>
+      <tbody>${d.locacoes.map(l => `<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:8px 10px">${fmtDate(l.data_retirada)}</td><td style="padding:8px 10px">${fmtDate(l.data_devolucao)}</td><td style="padding:8px 10px;text-align:right;font-weight:500">${brl(l.total)}</td><td style="padding:8px 10px">${statusBadge(l.status)}</td></tr>`).join('')}</tbody>
+    </table>` : '<div style="padding:24px;text-align:center;color:var(--text-muted)">Nenhuma locação encontrada</div>';
+  } else {
+    el.innerHTML = d.orcamentos.length ? `<table style="width:100%;font-size:13px;border-collapse:collapse">
+      <thead><tr style="background:var(--bg2)"><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Número</th><th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-muted)">Total</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Validade</th><th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-muted)">Status</th></tr></thead>
+      <tbody>${d.orcamentos.map(o => `<tr style="border-bottom:0.5px solid var(--border)"><td style="padding:8px 10px;font-weight:500">${o.numero}</td><td style="padding:8px 10px;text-align:right;font-weight:500">${brl(o.total)}</td><td style="padding:8px 10px">${fmtDate(o.validade)}</td><td style="padding:8px 10px">${statusBadge(o.status)}</td></tr>`).join('')}</tbody>
+    </table>` : '<div style="padding:24px;text-align:center;color:var(--text-muted)">Nenhum orçamento encontrado</div>';
+  }
+}
+
+// ─── UPLOAD DE LOGO ──────────────────────────────────────────────────────────
+async function uploadLogo() {
+  const input = document.getElementById('logo-input');
+  if (!input.files.length) { toast('Selecione um arquivo de imagem', 'error'); return; }
+  const form = new FormData();
+  form.append('logo', input.files[0]);
+  const res = await fetch(`${API}/upload-logo`, { method: 'POST', body: form });
+  if (res.ok) {
+    toast('Logo enviada com sucesso!', 'success');
+    document.getElementById('logo-preview').innerHTML = `<img src="${API}/logo?t=${Date.now()}" style="max-height:60px;border-radius:6px;border:0.5px solid var(--border);padding:6px">`;
+  } else {
+    const err = await res.json();
+    toast(err.erro || 'Erro ao enviar logo', 'error');
+  }
+}
+
+async function carregarPreviewLogo() {
+  try {
+    const res = await fetch(`${API}/logo`);
+    if (res.ok) {
+      document.getElementById('logo-preview').innerHTML = `<img src="${API}/logo?t=${Date.now()}" style="max-height:60px;border-radius:6px;border:0.5px solid var(--border);padding:6px">`;
+    }
+  } catch(e) {}
+}
+</script>
+</body>
+</html>
