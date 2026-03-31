@@ -1,0 +1,59 @@
+# ── Banco de Dados (dados sensíveis) ─────────────────────────────────────────
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+venv/
+.venv/
+env/
+ENV/
+
+# ── PDFs Gerados ──────────────────────────────────────────────────────────────
+docs/*.pdf
+
+# ── Backups ───────────────────────────────────────────────────────────────────
+backups/
+
+# ── Node / Vite ───────────────────────────────────────────────────────────────
+node_modules/
+decor-venue-flow-main/node_modules/
+decor-venue-flow-main/dist/
+decor-venue-flow-main/.vite/
+decor-venue-flow-main/vite.config.ts.timestamp*
+
+# ── Lock files (manter apenas um) ────────────────────────────────────────────
+decor-venue-flow-main/bun.lock
+decor-venue-flow-main/bun.lockb
+
+# ── Sistema Operacional ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Variáveis de ambiente ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example

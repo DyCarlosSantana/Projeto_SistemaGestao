@@ -4,7 +4,7 @@ color 0A
 
 echo.
 echo  =============================================
-echo        DripArt - Sistema de Gestao v1.0
+echo        DripArt - Sistema de Gestao v5.0
 echo  =============================================
 echo.
 

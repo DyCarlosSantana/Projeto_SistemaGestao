@@ -4,20 +4,19 @@ import datetime, os, json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
-TEMPLATE_DIR = BASE_DIR
-STATIC_DIR = BASE_DIR
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
+STATIC_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
 
 print(f"Pasta: {BASE_DIR}")
 
 try:
-    from pdf_generator import gerar_orcamento_pdf, gerar_nota_venda_pdf, gerar_pdf_locacao, gerar_relatorio_pdf, gerar_pdf_encomenda, gerar_pdf_encomenda
+    from pdf_generator import gerar_orcamento_pdf, gerar_nota_venda_pdf, gerar_pdf_locacao, gerar_relatorio_pdf, gerar_pdf_encomenda
     PDF_OK = True
 except ImportError:
     PDF_OK = False
     print("AVISO: reportlab nao encontrado. PDFs desabilitados.")
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
-app.config['JSON_ENSURE_ASCII'] = False
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/')
 
 # CORS manual - permite acesso do navegador local
 @app.after_request
@@ -30,7 +29,12 @@ def add_cors(response):
 @app.errorhandler(Exception)
 def handle_error(e):
     import traceback
-    print("ERRO:", traceback.format_exc())
+    tb = traceback.format_exc()
+    print("ERRO:", tb)
+    # Don't catch 404/405 routing errors as 500
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return jsonify({'erro': e.description, 'tipo': e.name}), e.code
     return jsonify({'erro': str(e), 'tipo': type(e).__name__}), 500
 
 # ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -54,15 +58,125 @@ def proximo_numero_orcamento():
     db.close()
     return f"ORC-{n:04d}"
 
-# ─── FRONTEND ─────────────────────────────────────────────────────────────────
+def proximo_numero_encomenda():
+    db = get_db()
+    row = db.execute("SELECT COUNT(*) as c FROM encomendas").fetchone()
+    n = (row['c'] or 0) + 1
+    db.close()
+    return f"ENC-{n:04d}"
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# ─── AUTENTICAÇÃO E USUÁRIOS ──────────────────────────────────────────────────
 
-@app.route('/favicon.ico')
-def favicon():
-    return '', 204
+from werkzeug.security import generate_password_hash, check_password_hash
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    d = request.get_json(force=True, silent=True) or {}
+    email = d.get('email', '')
+    senha = d.get('senha', '')
+    if not email or not senha:
+        return jsonify({'erro': 'Email e senha obrigatórios'}), 400
+    
+    db = get_db()
+    user = row_to_dict(db.execute("SELECT id, nome, email, role, ativo, senha_hash FROM usuarios WHERE email=?", (email,)).fetchone())
+    db.close()
+    
+    if not user or user.get('ativo') == 0:
+        return jsonify({'erro': 'Usuário inválido ou inativo'}), 401
+        
+    if not check_password_hash(user['senha_hash'], senha):
+        return jsonify({'erro': 'Senha incorreta'}), 401
+    
+    del user['senha_hash']
+    return jsonify({
+        'ok': True, 
+        'token': f"drip_{user['id']}_{user['role']}",
+        'user': user
+    })
+
+@app.route('/api/usuarios', methods=['GET'])
+def listar_usuarios():
+    db = get_db()
+    rows = db.execute("SELECT id, nome, email, role, ativo, criado_em FROM usuarios WHERE ativo=1").fetchall()
+    db.close()
+    return jsonify(rows_to_list(rows))
+
+@app.route('/api/usuarios', methods=['POST'])
+def criar_usuario():
+    d = request.get_json(force=True, silent=True) or {}
+    senha = d.get('senha', '')
+    senha_hash = generate_password_hash(senha) if senha else generate_password_hash('123456')
+    
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?, ?, ?, ?)",
+            (d.get('nome',''), d.get('email',''), senha_hash, d.get('role','operador'))
+        )
+        db.commit()
+        user_id = cur.lastrowid
+        row = db.execute("SELECT id, nome, email, role, ativo FROM usuarios WHERE id=?", (user_id,)).fetchone()
+    except Exception as e:
+        db.close()
+        return jsonify({"erro": str(e)}), 400
+    db.close()
+    return jsonify(row_to_dict(row)), 201
+
+@app.route('/api/usuarios/<int:id>', methods=['PUT'])
+def atualizar_usuario(id):
+    d = request.get_json(force=True, silent=True) or {}
+    db = get_db()
+    
+    if d.get('senha'):
+        senha_hash = generate_password_hash(d['senha'])
+        db.execute(
+            "UPDATE usuarios SET nome=?, email=?, role=?, senha_hash=? WHERE id=?",
+            (d.get('nome',''), d.get('email',''), d.get('role','operador'), senha_hash, id)
+        )
+    else:
+        db.execute(
+            "UPDATE usuarios SET nome=?, email=?, role=? WHERE id=?",
+            (d.get('nome',''), d.get('email',''), d.get('role','operador'), id)
+        )
+        
+    db.commit()
+    row = db.execute("SELECT id, nome, email, role, ativo FROM usuarios WHERE id=?", (id,)).fetchone()
+    db.close()
+    return jsonify(row_to_dict(row))
+
+@app.route('/api/usuarios/<int:id>', methods=['DELETE'])
+def deletar_usuario(id):
+    db = get_db()
+    row = db.execute("SELECT role FROM usuarios WHERE id=?", (id,)).fetchone()
+    if row and row['role'] == 'admin':
+        admin_count = db.execute("SELECT COUNT(*) FROM usuarios WHERE role='admin' AND ativo=1").fetchone()[0]
+        if admin_count <= 1:
+            db.close()
+            return jsonify({'erro': 'Não é possível remover o último administrador.'}), 400
+
+    db.execute("UPDATE usuarios SET ativo=0 WHERE id=?", (id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+# ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────────
+
+@app.route('/api/configuracoes', methods=['GET'])
+def ler_configuracoes():
+    return jsonify(get_config())
+
+@app.route('/api/configuracoes', methods=['POST'])
+def salvar_configuracoes():
+    db = get_db()
+    data = request.get_json(force=True, silent=True) or {}
+    for k, v in data.items():
+        db.execute(
+            "INSERT INTO configuracoes (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=?",
+            (k, str(v), str(v))
+        )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
 
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
@@ -195,11 +309,11 @@ def listar_clientes():
 
 @app.route('/api/clientes', methods=['POST'])
 def criar_cliente():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, obs) VALUES (?,?,?,?,?,?)",
-        (d['nome'], d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''))
+        (d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''))
     )
     db.commit()
     row = db.execute("SELECT * FROM clientes WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -208,11 +322,11 @@ def criar_cliente():
 
 @app.route('/api/clientes/<int:id>', methods=['PUT'])
 def atualizar_cliente(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE clientes SET nome=?, telefone=?, email=?, cpf_cnpj=?, endereco=?, obs=? WHERE id=?",
-        (d['nome'], d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''), id)
+        (d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''), id)
     )
     db.commit()
     row = db.execute("SELECT * FROM clientes WHERE id=?", (id,)).fetchone()
@@ -272,11 +386,11 @@ def listar_produtos():
 
 @app.route('/api/produtos', methods=['POST'])
 def criar_produto():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO produtos (nome, descricao, categoria, preco_venda, estoque) VALUES (?,?,?,?,?)",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0))
+        "INSERT INTO produtos (nome, descricao, categoria, preco_venda, estoque, imagem_url) VALUES (?,?,?,?,?,?)",
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''))
     )
     db.commit()
     row = db.execute("SELECT * FROM produtos WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -285,11 +399,11 @@ def criar_produto():
 
 @app.route('/api/produtos/<int:id>', methods=['PUT'])
 def atualizar_produto(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE produtos SET nome=?, descricao=?, categoria=?, preco_venda=?, estoque=? WHERE id=?",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), id)
+        "UPDATE produtos SET nome=?, descricao=?, categoria=?, preco_venda=?, estoque=?, imagem_url=? WHERE id=?",
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''), id)
     )
     db.commit()
     row = db.execute("SELECT * FROM produtos WHERE id=?", (id,)).fetchone()
@@ -315,11 +429,11 @@ def listar_materiais():
 
 @app.route('/api/materiais', methods=['POST'])
 def criar_material():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO materiais_impressao (nome, preco_m2, custo_material, margem_lucro, tipo, preco_unidade) VALUES (?,?,?,?,?,?)",
-        (d['nome'], d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0))
+        (d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0))
     )
     db.commit()
     row = db.execute("SELECT * FROM materiais_impressao WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -328,11 +442,11 @@ def criar_material():
 
 @app.route('/api/materiais/<int:id>', methods=['PUT'])
 def atualizar_material(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE materiais_impressao SET nome=?, preco_m2=?, custo_material=?, margem_lucro=?, tipo=?, preco_unidade=? WHERE id=?",
-        (d['nome'], d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0), id)
+        (d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0), id)
     )
     db.commit()
     row = db.execute("SELECT * FROM materiais_impressao WHERE id=?", (id,)).fetchone()
@@ -356,7 +470,7 @@ def listar_acabamentos():
 
 @app.route('/api/calcular-impressao', methods=['POST'])
 def calcular_impressao():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     material_id = d.get('material_id')
     quantidade = int(d.get('quantidade', 1))
     acabamentos_ids = d.get('acabamentos', [])
@@ -422,19 +536,38 @@ def listar_vendas():
     db = get_db()
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
+    status = request.args.get('status', '')
+    q_str = request.args.get('q', '')
+    
     q = "SELECT * FROM vendas"
+    where = []
     params = []
+    
     if data_ini and data_fim:
-        q += " WHERE date(criado_em) BETWEEN ? AND ?"
-        params = [data_ini, data_fim]
-    q += " ORDER BY criado_em DESC LIMIT 100"
+        where.append("date(criado_em) BETWEEN ? AND ?")
+        params.extend([data_ini, data_fim])
+    if status:
+        where.append("status=?")
+        params.append(status)
+    if q_str:
+        where.append("cliente_nome LIKE ?")
+        params.append(f'%{q_str}%')
+        
+    if where:
+        q += " WHERE " + " AND ".join(where)
+        
+    if status == 'fiado':
+        q += " ORDER BY COALESCE(data_vencimento, '9999-12-31') ASC LIMIT 200"
+    else:
+        q += " ORDER BY criado_em DESC LIMIT 100"
+        
     rows = db.execute(q, params).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/vendas', methods=['POST'])
 def criar_venda():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     venc = d.get('data_vencimento') or (None if d.get('forma_pagamento') != 'fiado' else
            (datetime.date.today() + datetime.timedelta(days=30)).isoformat())
@@ -442,7 +575,7 @@ def criar_venda():
         "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (d.get('cliente_id'), d.get('cliente_nome',''), d.get('tipo','venda'),
          d.get('subtotal', 0), d.get('desconto', 0), d.get('total', 0),
-         d['forma_pagamento'], d.get('status','pago'), d.get('obs',''), venc)
+         d.get('forma_pagamento',''), d.get('status','pago'), d.get('obs',''), venc)
     )
     venda_id = cur.lastrowid
     for item in d.get('itens', []):
@@ -462,12 +595,12 @@ def criar_venda():
 
 @app.route('/api/vendas/<int:id>', methods=['PUT'])
 def atualizar_venda(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE vendas SET cliente_nome=?, tipo=?, subtotal=?, desconto=?, total=?, forma_pagamento=?, status=?, obs=? WHERE id=?",
         (d.get('cliente_nome',''), d.get('tipo','venda'), d.get('subtotal', 0),
-         d.get('desconto',0), d.get('total', 0), d['forma_pagamento'],
+         d.get('desconto',0), d.get('total', 0), d.get('forma_pagamento',''),
          d.get('status','pago'), d.get('obs',''), id)
     )
     # update items: delete and re-insert
@@ -520,14 +653,13 @@ def pdf_venda(id):
 def quitar_venda(id):
     db = get_db()
     db.execute("UPDATE vendas SET status='pago', forma_pagamento=? WHERE id=?",
-               (request.json.get('forma_pagamento','dinheiro'), id))
+               (request.get_json(force=True, silent=True).get('forma_pagamento','dinheiro'), id))
     db.commit()
     row = row_to_dict(db.execute("SELECT * FROM vendas WHERE id=?", (id,)).fetchone())
     db.close()
     return jsonify(row)
 
 # ─── PDF ENCOMENDA ────────────────────────────────────────────────────────────
-
 
 @app.route('/api/agenda', methods=['GET'])
 def listar_agenda():
@@ -560,12 +692,12 @@ def proximos_eventos():
 
 @app.route('/api/agenda', methods=['POST'])
 def criar_evento():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO agenda (titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, locacao_id, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (d['titulo'], d.get('tipo','compromisso'), d['data_inicio'],
-         d.get('data_fim', d['data_inicio']), d.get('hora_inicio','08:00'),
+        (d.get('titulo',''), d.get('tipo','compromisso'), d.get('data_inicio',''),
+         d.get('data_fim', d.get('data_inicio','')), d.get('hora_inicio','08:00'),
          d.get('hora_fim','09:00'), d.get('cliente_nome',''), d.get('descricao',''),
          d.get('status','pendente'), d.get('locacao_id'), d.get('encomenda_id'),
          d.get('cor','#534AB7'))
@@ -577,12 +709,12 @@ def criar_evento():
 
 @app.route('/api/agenda/<int:id>', methods=['PUT'])
 def atualizar_evento(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE agenda SET titulo=?, tipo=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, cliente_nome=?, descricao=?, status=?, cor=? WHERE id=?",
-        (d['titulo'], d.get('tipo','compromisso'), d['data_inicio'],
-         d.get('data_fim', d['data_inicio']), d.get('hora_inicio','08:00'),
+        (d.get('titulo',''), d.get('tipo','compromisso'), d.get('data_inicio',''),
+         d.get('data_fim', d.get('data_inicio','')), d.get('hora_inicio','08:00'),
          d.get('hora_fim','09:00'), d.get('cliente_nome',''), d.get('descricao',''),
          d.get('status','pendente'), d.get('cor','#534AB7'), id)
     )
@@ -632,14 +764,14 @@ def listar_locacoes():
 
 @app.route('/api/locacoes', methods=['POST'])
 def criar_locacao():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     venc_loc = d.get('data_vencimento') or (None if d.get('forma_pagamento') != 'fiado' else
               (datetime.date.today() + datetime.timedelta(days=30)).isoformat())
     cur = db.execute(
         "INSERT INTO locacoes (cliente_id, cliente_nome, tipo, data_retirada, data_devolucao, total, desconto, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (d.get('cliente_id'), d['cliente_nome'], d.get('tipo','item'),
-         d['data_retirada'], d['data_devolucao'],
+        (d.get('cliente_id'), d.get('cliente_nome',''), d.get('tipo','item'),
+         d.get('data_retirada',''), d.get('data_devolucao',''),
          d.get('total', 0), d.get('desconto',0), d.get('forma_pagamento',''),
          d.get('status','ativo'), d.get('obs',''), venc_loc)
     )
@@ -653,8 +785,8 @@ def criar_locacao():
     # Sincroniza com agenda automaticamente
     db.execute(
         "INSERT INTO agenda (titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, status, locacao_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (f"Locacao: {d['cliente_nome']}", 'locacao', d['data_retirada'], d['data_devolucao'],
-         '08:00', '18:00', d['cliente_nome'], 'pendente', loc_id, '#1D9E75')
+        (f"Locacao: {d.get('cliente_nome','')}", 'locacao', d.get('data_retirada',''), d.get('data_devolucao',''),
+         '08:00', '18:00', d.get('cliente_nome',''), 'pendente', loc_id, '#1D9E75')
     )
     db.commit()
     row = db.execute("SELECT * FROM locacoes WHERE id=?", (loc_id,)).fetchone()
@@ -663,11 +795,11 @@ def criar_locacao():
 
 @app.route('/api/locacoes/<int:id>', methods=['PUT'])
 def atualizar_locacao(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE locacoes SET cliente_nome=?, data_retirada=?, data_devolucao=?, total=?, desconto=?, forma_pagamento=?, obs=? WHERE id=?",
-        (d['cliente_nome'], d['data_retirada'], d['data_devolucao'],
+        (d.get('cliente_nome',''), d.get('data_retirada',''), d.get('data_devolucao',''),
          d.get('total', 0), d.get('desconto',0), d.get('forma_pagamento',''), d.get('obs',''), id)
     )
     db.execute("DELETE FROM locacao_itens WHERE locacao_id=?", (id,))
@@ -685,6 +817,7 @@ def atualizar_locacao(id):
 @app.route('/api/locacoes/<int:id>', methods=['DELETE'])
 def deletar_locacao(id):
     db = get_db()
+    db.execute("DELETE FROM agenda WHERE locacao_id=?", (id,))
     db.execute("DELETE FROM locacao_itens WHERE locacao_id=?", (id,))
     db.execute("DELETE FROM locacoes WHERE id=?", (id,))
     db.commit()
@@ -705,13 +838,43 @@ def pdf_locacao(id):
 
 @app.route('/api/locacoes/<int:id>/status', methods=['PUT'])
 def atualizar_status_locacao(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    db.execute("UPDATE locacoes SET status=? WHERE id=?", (d['status'], id))
+    db.execute("UPDATE locacoes SET status=? WHERE id=?", (d.get('status',''), id))
     db.commit()
     row = db.execute("SELECT * FROM locacoes WHERE id=?", (id,)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
+
+@app.route('/api/locacoes/<int:id>/converter', methods=['POST'])
+def converter_locacao_venda(id):
+    d = request.get_json(force=True, silent=True) or {}
+    forma = d.get('forma_pagamento', 'dinheiro')
+    db = get_db()
+    
+    loc = row_to_dict(db.execute("SELECT * FROM locacoes WHERE id=?", (id,)).fetchone())
+    if not loc:
+        db.close()
+        return jsonify({'erro': 'Locacao nao encontrada'}), 404
+        
+    itens = rows_to_list(db.execute("SELECT * FROM locacao_itens WHERE locacao_id=?", (id,)).fetchall())
+    
+    cur = db.execute(
+        "INSERT INTO vendas (cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status) VALUES (?,?,?,?,?,?,?)",
+        (loc.get('cliente_nome',''), 'locacao', loc.get('total',0), loc.get('desconto',0), loc.get('total',0), forma, 'pago')
+    )
+    venda_id = cur.lastrowid
+    
+    for item in itens:
+        db.execute(
+            "INSERT INTO venda_itens (venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
+            (venda_id, f"[Locação #{id}] " + item['nome'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+        )
+        
+    db.execute("UPDATE locacoes SET status='faturado' WHERE id=?", (id,))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'venda_id': venda_id})
 
 @app.route('/api/itens-locacao', methods=['GET'])
 def listar_itens_locacao():
@@ -726,11 +889,11 @@ def listar_itens_locacao():
 
 @app.route('/api/itens-locacao', methods=['POST'])
 def criar_item_locacao():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO itens_locacao (nome, descricao, categoria, preco_diaria, quantidade_total) VALUES (?,?,?,?,?)",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1))
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1))
     )
     db.commit()
     row = db.execute("SELECT * FROM itens_locacao WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -739,11 +902,11 @@ def criar_item_locacao():
 
 @app.route('/api/itens-locacao/<int:id>', methods=['PUT'])
 def atualizar_item_locacao(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE itens_locacao SET nome=?, descricao=?, categoria=?, preco_diaria=?, quantidade_total=? WHERE id=?",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1), id)
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1), id)
     )
     db.commit()
     row = db.execute("SELECT * FROM itens_locacao WHERE id=?", (id,)).fetchone()
@@ -774,11 +937,11 @@ def listar_kits():
 
 @app.route('/api/kits', methods=['POST'])
 def criar_kit():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO kits_locacao (nome, descricao, preco_total) VALUES (?,?,?)",
-        (d['nome'], d.get('descricao',''), d.get('preco_total', 0))
+        (d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0))
     )
     kit_id = cur.lastrowid
     for item in d.get('itens', []):
@@ -791,10 +954,10 @@ def criar_kit():
 
 @app.route('/api/kits/<int:id>', methods=['PUT'])
 def atualizar_kit(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute("UPDATE kits_locacao SET nome=?, descricao=?, preco_total=? WHERE id=?",
-               (d['nome'], d.get('descricao',''), d.get('preco_total', 0), id))
+               (d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0), id))
     db.execute("DELETE FROM kit_itens WHERE kit_id=?", (id,))
     for item in d.get('itens', []):
         db.execute("INSERT INTO kit_itens (kit_id, item_id, quantidade) VALUES (?,?,?)",
@@ -824,7 +987,7 @@ def listar_orcamentos():
 
 @app.route('/api/orcamentos', methods=['POST'])
 def criar_orcamento():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     numero = proximo_numero_orcamento()
     config = get_config()
@@ -850,7 +1013,7 @@ def criar_orcamento():
 
 @app.route('/api/orcamentos/<int:id>', methods=['PUT'])
 def atualizar_orcamento(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE orcamentos SET cliente_nome=?, subtotal=?, desconto=?, total=?, obs=? WHERE id=?",
@@ -885,9 +1048,9 @@ def itens_orcamento(id):
 
 @app.route('/api/orcamentos/<int:id>/status', methods=['PUT'])
 def atualizar_status_orcamento(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    db.execute("UPDATE orcamentos SET status=? WHERE id=?", (d['status'], id))
+    db.execute("UPDATE orcamentos SET status=? WHERE id=?", (d.get('status',''), id))
     db.commit()
     row = db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone()
     db.close()
@@ -965,11 +1128,11 @@ def listar_despesas():
 
 @app.route('/api/despesas', methods=['POST'])
 def criar_despesa():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO despesas (descricao, categoria, valor, forma_pagamento, data, obs) VALUES (?,?,?,?,?,?)",
-        (d['descricao'], d.get('categoria','geral'), d.get('valor', 0),
+        (d.get('descricao',''), d.get('categoria','geral'), d.get('valor', 0),
          d.get('forma_pagamento','dinheiro'), d.get('data', datetime.date.today().isoformat()), d.get('obs',''))
     )
     db.commit()
@@ -979,11 +1142,11 @@ def criar_despesa():
 
 @app.route('/api/despesas/<int:id>', methods=['PUT'])
 def atualizar_despesa(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE despesas SET descricao=?, categoria=?, valor=?, forma_pagamento=?, data=?, obs=? WHERE id=?",
-        (d['descricao'], d.get('categoria','geral'), d.get('valor', 0),
+        (d.get('descricao',''), d.get('categoria','geral'), d.get('valor', 0),
          d.get('forma_pagamento','dinheiro'), d.get('data',''), d.get('obs',''), id)
     )
     db.commit()
@@ -1037,10 +1200,26 @@ def proximo_numero_encomenda():
 def listar_encomendas():
     db = get_db()
     status = request.args.get('status', '')
-    if status:
-        rows = db.execute("SELECT * FROM encomendas WHERE status=? ORDER BY data_entrega ASC, criado_em DESC", (status,)).fetchall()
-    else:
-        rows = db.execute("SELECT * FROM encomendas WHERE status != 'entregue' ORDER BY data_entrega ASC, criado_em DESC").fetchall()
+    q = request.args.get('q', '')
+    
+    where = []
+    params = []
+    if status and status != 'todas':
+        where.append("status=?")
+        params.append(status)
+    elif not status:
+        where.append("status != 'entregue'")
+        
+    if q:
+        where.append("cliente_nome LIKE ?")
+        params.append(f'%{q}%')
+        
+    sql = "SELECT * FROM encomendas"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY data_entrega ASC, criado_em DESC LIMIT 200"
+    
+    rows = db.execute(sql, params).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
@@ -1053,12 +1232,12 @@ def todas_encomendas():
 
 @app.route('/api/encomendas', methods=['POST'])
 def criar_encomenda():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     numero = proximo_numero_encomenda()
     cur = db.execute(
         "INSERT INTO encomendas (numero, cliente_id, cliente_nome, descricao, status, data_pedido, data_entrega, total, sinal, obs) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (numero, d.get('cliente_id'), d['cliente_nome'], d['descricao'],
+        (numero, d.get('cliente_id'), d.get('cliente_nome',''), d.get('descricao',''),
          d.get('status','pedido'), d.get('data_pedido', datetime.date.today().isoformat()),
          d.get('data_entrega',''), d.get('total',0), d.get('sinal',0), d.get('obs',''))
     )
@@ -1066,19 +1245,20 @@ def criar_encomenda():
     if d.get('data_entrega'):
         db.execute(
             "INSERT INTO agenda (titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (f"Entrega: {d['cliente_nome']}", 'encomenda', d['data_entrega'], d['data_entrega'],
-             '08:00', '18:00', d['cliente_nome'], d.get('descricao','')[:60], 'pendente', cur.lastrowid, '#534AB7')
+            (f"Entrega: {d.get('cliente_nome','')}", 'encomenda', d.get('data_entrega',''), d.get('data_entrega',''),
+             '08:00', '18:00', d.get('cliente_nome',''), d.get('descricao','')[:60], 'pendente', cur.lastrowid, '#534AB7')
         )
     db.commit()
     row = db.execute("SELECT * FROM encomendas WHERE id=?", (cur.lastrowid,)).fetchone()
     db.close()
     return jsonify(row_to_dict(row)), 201
 
+
 @app.route('/api/encomendas/<int:id>/status', methods=['PUT'])
 def atualizar_status_encomenda(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    db.execute("UPDATE encomendas SET status=? WHERE id=?", (d['status'], id))
+    db.execute("UPDATE encomendas SET status=? WHERE id=?", (d.get('status',''), id))
     db.commit()
     row = db.execute("SELECT * FROM encomendas WHERE id=?", (id,)).fetchone()
     db.close()
@@ -1086,11 +1266,11 @@ def atualizar_status_encomenda(id):
 
 @app.route('/api/encomendas/<int:id>', methods=['PUT'])
 def atualizar_encomenda(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE encomendas SET cliente_nome=?, descricao=?, status=?, data_entrega=?, total=?, sinal=?, obs=? WHERE id=?",
-        (d['cliente_nome'], d['descricao'], d.get('status','pedido'),
+        (d.get('cliente_nome',''), d.get('descricao',''), d.get('status','pedido'),
          d.get('data_entrega',''), d.get('total',0), d.get('sinal',0), d.get('obs',''), id)
     )
     db.commit()
@@ -1102,6 +1282,7 @@ def atualizar_encomenda(id):
 @app.route('/api/encomendas/<int:id>', methods=['DELETE'])
 def deletar_encomenda(id):
     db = get_db()
+    db.execute("DELETE FROM agenda WHERE encomenda_id=?", (id,))
     db.execute("DELETE FROM encomendas WHERE id=?", (id,))
     db.commit()
     db.close()
@@ -1122,11 +1303,11 @@ def listar_servicos():
 
 @app.route('/api/servicos', methods=['POST'])
 def criar_servico():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
         "INSERT INTO servicos (nome, descricao, categoria, tipo_preco, preco) VALUES (?,?,?,?,?)",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0))
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0))
     )
     db.commit()
     row = db.execute("SELECT * FROM servicos WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1135,11 +1316,11 @@ def criar_servico():
 
 @app.route('/api/servicos/<int:id>', methods=['PUT'])
 def atualizar_servico(id):
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
         "UPDATE servicos SET nome=?, descricao=?, categoria=?, tipo_preco=?, preco=? WHERE id=?",
-        (d['nome'], d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0), id)
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0), id)
     )
     db.commit()
     row = db.execute("SELECT * FROM servicos WHERE id=?", (id,)).fetchone()
@@ -1188,7 +1369,7 @@ def converter_orcamento_venda(id):
         db.close()
         return jsonify({'erro': 'Orçamento não encontrado'}), 404
     itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
-    d = request.json or {}
+    d = request.get_json(force=True, silent=True) or {} or {}
     cur = db.execute(
         "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs) VALUES (?,?,?,?,?,?,?,?,?)",
         (orc.get('cliente_id'), orc.get('cliente_nome',''), 'orcamento',
@@ -1217,7 +1398,7 @@ def converter_encomenda_venda(id):
     if not enc:
         db.close()
         return jsonify({'erro': 'Encomenda não encontrada'}), 404
-    d = request.json or {}
+    d = request.get_json(force=True, silent=True) or {} or {}
     cur = db.execute(
         "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs) VALUES (?,?,?,?,?,?,?,?,?)",
         (enc.get('cliente_id'), enc.get('cliente_nome',''), 'encomenda',
@@ -1382,7 +1563,7 @@ def listar_fiado():
 
 @app.route('/api/vendas/<int:id>/receber', methods=['PUT'])
 def receber_fiado(id):
-    d = request.json or {}
+    d = request.get_json(force=True, silent=True) or {} or {}
     db = get_db()
     db.execute(
         "UPDATE vendas SET status='pago', forma_pagamento=? WHERE id=?",
@@ -1461,7 +1642,7 @@ def ver_logo():
 
 @app.route('/api/configuracoes', methods=['PUT'])
 def salvar_config():
-    d = request.json
+    d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     for chave, valor in d.items():
         db.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?,?)", (chave, str(valor)))
@@ -1491,8 +1672,127 @@ def fazer_backup():
     except Exception as e:
         print(f"Aviso backup: {e}")
 
+
+# ─── NOVAS FUNCOES (DRE, EXPORTACAO, E CONVERSAO) ─────────────────────────
+
+import csv, io
+
+@app.route('/api/dashboard/dre')
+def get_dre():
+    db = get_db()
+    vendas = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM vendas WHERE status='pago' GROUP BY mes").fetchall()
+    locacoes = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM locacoes WHERE status='pago' OR status='ativo' GROUP BY mes").fetchall()
+    despesas = db.execute("SELECT strftime('%Y-%m', data_vencimento) as mes, SUM(valor) as val FROM despesas WHERE status='pago' GROUP BY mes").fetchall()
+    db.close()
+    
+    try:
+        meses_set = set([r['mes'] for r in vendas if r['mes']] + [r['mes'] for r in locacoes if r['mes']] + [r['mes'] for r in despesas if r['mes']])
+        meses = sorted(list(meses_set))
+        
+        dre = []
+        for mes in meses:
+            v = sum([r['val'] for r in vendas if r['mes'] == mes])
+            l = sum([r['val'] for r in locacoes if r['mes'] == mes])
+            d = sum([r['val'] for r in despesas if r['mes'] == mes])
+            receita = (v or 0) + (l or 0)
+            despesa = d or 0
+            dre.append({
+                'mes': mes,
+                'receitas': receita,
+                'despesas': despesa,
+                'lucro': receita - despesa
+            })
+        return jsonify(dre)
+    except Exception as e:
+        print("Erro DRE:", e)
+        return jsonify([])
+
+@app.route('/api/vendas/exportar')
+def exportar_vendas_csv():
+    db = get_db()
+    rows = db.execute("SELECT * FROM vendas ORDER BY criado_em DESC").fetchall()
+    db.close()
+    
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(['ID', 'Data', 'Cliente', 'Tipo', 'Forma Pgto', 'Status', 'Total'])
+    for r in rows:
+        cw.writerow([r['id'], r['criado_em'], r['cliente_nome'], r['tipo'], r['forma_pagamento'], r['status'], r['total']])
+    
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = "attachment; filename=export_vendas.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
+
+@app.route('/api/locacoes/exportar')
+def exportar_locacoes_csv():
+    db = get_db()
+    rows = db.execute("SELECT * FROM locacoes ORDER BY criado_em DESC").fetchall()
+    db.close()
+    
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(['ID', 'Data', 'Cliente', 'Retirada', 'Devolucao', 'Forma Pgto', 'Status', 'Total'])
+    for r in rows:
+        cw.writerow([r['id'], r['criado_em'], r['cliente_nome'], r['data_retirada'], r['data_devolucao'], r['forma_pagamento'], r['status'], r['total']])
+    
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = "attachment; filename=export_locacoes.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
+
+@app.route('/api/orcamentos/<int:id>/converter-locacao', methods=['POST'])
+def converter_orcamento_locacao(id):
+    db = get_db()
+    orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone())
+    if not orc: 
+        db.close()
+        return jsonify({'erro': 'Orçamento não encontrado'}), 404
+        
+    itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
+    
+    cur = db.execute(
+        "INSERT INTO locacoes (cliente_nome, tipo, data_retirada, data_devolucao, desconto, total, forma_pagamento, status) VALUES (?,?,?,?,?,?,?,?)",
+        (orc.get('cliente_nome',''), 'item', orc.get('criado_em',''), orc.get('validade',''), orc.get('desconto',0), orc.get('total',0), '', 'ativo')
+    )
+    loc_id = cur.lastrowid
+    
+    for item in itens:
+        db.execute(
+            "INSERT INTO locacao_itens (locacao_id, nome, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
+            (loc_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+        )
+    
+    db.execute("UPDATE orcamentos SET status='aprovado' WHERE id=?", (id,))
+    
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'locacao_id': loc_id})
+
+
+# ─── FRONTEND (React App) ─────────────────────────────────────────────────────
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    if path.startswith('api/'):
+        from flask import jsonify
+        return jsonify({'erro': 'Endpoint não encontrado'}), 404
+    
+    # Block SPA from returning HTML to missing JS/CSS asset requests
+    if path.startswith('assets/'):
+        from flask import make_response
+        return make_response("File not found", 404)
+        
+    index_path = os.path.join(TEMPLATE_DIR, 'index.html')
+    if os.path.exists(index_path):
+        with open(index_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    return "Aguarde, gerando Frontend...", 404
+
+
 if __name__ == '__main__':
     init_db()
     fazer_backup()
     print("DripArt iniciando em http://localhost:5000")
-    app.run(debug=False, port=5000, host='127.0.0.1')
+    app.run(debug=False, port=5000, host='0.0.0.0')

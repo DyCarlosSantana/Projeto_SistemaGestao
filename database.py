@@ -50,6 +50,16 @@ def init_db():
         ativo INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        senha_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'operador',
+        ativo INTEGER DEFAULT 1,
+        ultimo_login TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS itens_locacao (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT NOT NULL,
@@ -205,6 +215,16 @@ def init_db():
         cor TEXT DEFAULT '#534AB7',
         criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        senha_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'operador',
+        ativo INTEGER DEFAULT 1,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
     """)
 
     # Dados iniciais
@@ -303,6 +323,18 @@ def init_db():
             ("logo_path", ""),
             ("orcamento_validade_dias", "7"),
         ])
+
+    c.execute("SELECT COUNT(*) FROM usuarios")
+    if c.fetchone()[0] == 0:
+        from werkzeug.security import generate_password_hash
+        senha_admin = generate_password_hash('123456')
+        c.execute("INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?,?,?,?)",
+                 ("Administrador", "admin@dripart.com", senha_admin, "admin"))
+
+    try:
+        c.execute("ALTER TABLE produtos ADD COLUMN imagem_url TEXT")
+    except Exception as e:
+        pass
 
     conn.commit()
     conn.close()

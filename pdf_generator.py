@@ -8,11 +8,87 @@ from reportlab.pdfgen import canvas
 import os
 import datetime
 
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.barcode.qr import QrCodeWidget
+
 PURPLE = colors.HexColor('#534AB7')
 PURPLE_LIGHT = colors.HexColor('#EEEDFE')
 GRAY = colors.HexColor('#888780')
 GRAY_LIGHT = colors.HexColor('#F1EFE8')
 TEXT = colors.HexColor('#2C2C2A')
+
+def _crc16(payload):
+    crc = 0xFFFF
+    for char in payload:
+        crc ^= ord(char) << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc = crc << 1
+            crc &= 0xFFFF
+    return f"{crc:04X}"
+
+def gerar_brcode_pix(chave, valor_float, nome="Empresa", cidade="BR"):
+    """ Gera payload estático PIX EMVCo """
+    chave = str(chave).strip().replace(' ','').replace('-','').replace('(','').replace(')','')
+    if not chave: return None
+    valor = f"{valor_float:.2f}"
+    
+    p_format = "000201"
+    p_merchant_acc = f"0014BR.GOV.BCB.PIX01{len(chave):02d}{chave}"
+    p_merchant_acc = f"26{len(p_merchant_acc):02d}{p_merchant_acc}"
+    p_merchant_cat = "52040000"
+    p_currency = "5303986"
+    p_amount = f"54{len(valor):02d}{valor}" if valor_float > 0 else ""
+    p_country = "5802BR"
+    
+    nome_fmt = nome[:25].upper()
+    p_name = f"59{len(nome_fmt):02d}{nome_fmt}"
+    
+    cidade_fmt = cidade[:15].upper()
+    p_city = f"60{len(cidade_fmt):02d}{cidade_fmt}"
+    
+    txid = "PGTO"
+    p_additional = f"05{len(txid):02d}{txid}"
+    p_additional = f"62{len(p_additional):02d}{p_additional}"
+    
+    payload_sem_crc = f"{p_format}{p_merchant_acc}{p_merchant_cat}{p_currency}{p_amount}{p_country}{p_name}{p_city}{p_additional}6304"
+    return payload_sem_crc + _crc16(payload_sem_crc)
+
+def criar_bloco_pix(config, total):
+    pix_key = config.get('empresa_whatsapp') or config.get('empresa_cnpj')
+    if not pix_key or str(pix_key).strip() == "": return None
+    try:
+        pix_payload = gerar_brcode_pix(pix_key, total, config.get('empresa_nome', 'Empresa'))
+        if not pix_payload: return None
+        qr = QrCodeWidget(pix_payload)
+        qr.barWidth = 2.5 * cm
+        qr.barHeight = 2.5 * cm
+        qr_drawing = Drawing(2.5*cm, 2.5*cm)
+        qr_drawing.add(qr)
+        
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import Paragraph, Table, TableStyle
+        
+        pix_info = [
+            Paragraph("<b>PAGAMENTO VIA PIX</b>", ParagraphStyle('p1', fontSize=10, textColor=PURPLE, fontName='Helvetica-Bold')),
+            Paragraph(f"Chave (Celular/CNPJ): {pix_key}", ParagraphStyle('p2', fontSize=8, textColor=GRAY, fontName='Helvetica')),
+            Paragraph("Escaneie o código ao lado ou use a chave se preferir.", ParagraphStyle('p3', fontSize=8, textColor=GRAY, fontName='Helvetica'))
+        ]
+        
+        qr_table = Table([[qr_drawing, pix_info]], colWidths=[3*cm, 14*cm])
+        qr_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('BACKGROUND', (0,0), (-1,-1), PURPLE_LIGHT),
+            ('ROUNDEDCORNERS', [6]),
+            ('PADDING', (0,0), (-1,-1), 8),
+            ('LEFTPADDING', (0,0), (0,0), 10),
+            ('LEFTPADDING', (1,0), (1,0), 5)
+        ]))
+        return qr_table
+    except Exception:
+        return None
 
 def gerar_orcamento_pdf(orcamento, itens, config, logo_path=None):
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs')
@@ -141,6 +217,11 @@ def gerar_orcamento_pdf(orcamento, itens, config, logo_path=None):
     totais_table.setStyle(TableStyle(style))
     story.append(totais_table)
     story.append(Spacer(1, 1*cm))
+
+    qr_block = criar_bloco_pix(config, float(total if 'total' in locals() else 0))
+    if qr_block:
+        story.append(qr_block)
+        story.append(Spacer(1, 0.5*cm))
 
     # Rodapé
     story.append(HRFlowable(width="100%", thickness=0.5, color=GRAY_LIGHT))

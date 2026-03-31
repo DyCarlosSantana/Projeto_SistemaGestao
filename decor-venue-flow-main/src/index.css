@@ -1,0 +1,151 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand — vibrant pink-magenta */
+    --primary: 328 85% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 340 90% 62%;
+
+    /* Surfaces — warm white */
+    --background: 220 20% 97%;
+    --foreground: 225 15% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 225 15% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 15% 14%;
+
+    /* Secondary */
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 225 15% 14%;
+
+    /* Muted */
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 8% 50%;
+
+    /* Accent — soft cyan */
+    --accent: 190 70% 94%;
+    --accent-foreground: 190 60% 35%;
+
+    /* Semantic */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 60% 42%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 160 50% 94%;
+    --warning: 42 90% 52%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 42 80% 94%;
+    --info: 210 80% 55%;
+    --info-foreground: 0 0% 100%;
+    --info-light: 210 70% 95%;
+    --coral: 350 80% 55%;
+    --coral-light: 350 60% 95%;
+
+    /* Vibrant extras */
+    --cyan: 185 75% 48%;
+    --cyan-light: 185 60% 94%;
+    --gold: 42 90% 55%;
+    --gold-light: 42 80% 94%;
+    --violet: 260 60% 55%;
+    --violet-light: 260 50% 95%;
+
+    /* UI */
+    --border: 220 12% 91%;
+    --input: 220 12% 91%;
+    --ring: 328 85% 56%;
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 225 15% 14%;
+    --sidebar-foreground: 220 15% 65%;
+    --sidebar-primary: 328 85% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 12% 20%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 225 12% 20%;
+    --sidebar-ring: 328 85% 56%;
+
+    /* Fonts */
+    --font-display: 'Plus Jakarta Sans', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(225 15% 14% / 0.03);
+    --shadow-card: 0 1px 3px 0 hsl(225 15% 14% / 0.05), 0 1px 2px -1px hsl(225 15% 14% / 0.04);
+    --shadow-lg: 0 10px 25px -5px hsl(225 15% 14% / 0.07), 0 8px 10px -6px hsl(225 15% 14% / 0.03);
+  }
+
+  .dark {
+    --background: 225 15% 8%;
+    --foreground: 0 0% 95%;
+    --card: 225 12% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 225 12% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 328 85% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 10% 16%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 225 10% 16%;
+    --muted-foreground: 220 8% 55%;
+    --accent: 190 40% 18%;
+    --accent-foreground: 190 60% 70%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 225 10% 18%;
+    --input: 225 10% 18%;
+    --ring: 328 85% 60%;
+    --sidebar-background: 225 15% 6%;
+    --sidebar-foreground: 220 8% 55%;
+    --sidebar-primary: 328 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 12% 14%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 225 10% 14%;
+    --sidebar-ring: 328 85% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-gradient-brand {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--gold)));
+  }
+
+  .text-gradient-cool {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--cyan)), hsl(var(--info)));
+  }
+
+  .bg-gradient-brand {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+  }
+
+  .bg-gradient-warm {
+    background-image: linear-gradient(135deg, hsl(var(--gold)), hsl(var(--primary)));
+  }
+
+  .bg-gradient-cool {
+    background-image: linear-gradient(135deg, hsl(var(--cyan)), hsl(var(--info)));
+  }
+}
