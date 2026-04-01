@@ -53,20 +53,10 @@ O **DripArt** é um sistema POS (Point of Sale) e ERP leve desenvolvido especifi
 
 ## Interface
 
-O sistema possui um design escuro e moderno com paleta roxa/rosa, construído com **Tailwind CSS** e componentes **shadcn/ui**.
+O sistema possui um design escuro e moderno com paleta rosa, construído com **Tailwind CSS** e componentes **shadcn/ui**.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  💧 DripArt  │  Dashboard  │  [Usuário]  [Sair]     │
-├──────────────┼─────────────────────────────────────  │
-│  🏠 Dashboard │                                      │
-│  🛒 PDV      │   Resumo Financeiro do Mês            │
-│  📋 Orçamen. │   Receita: R$ 8.450  │  Lucro: ...   │
-│  📦 Locações │                                      │
-│  🎨 Pedidos  │   [Gráfico de Evolução Mensal]        │
-│  ...         │                                      │
-└──────────────┴─────────────────────────────────────  ┘
-```
+<img width="1919" height="977" alt="image" src="https://github.com/user-attachments/assets/4bef7f5a-048d-493c-90f5-a089c5666397" />
+
 
 ---
 
@@ -99,9 +89,41 @@ O script vai automaticamente:
 
 ---
 
+## 🛠️ Instalação Manual para Desenvolvimento
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/DyCarlosSantana/Projeto_Gestao_DripArt.git
+cd Projeto_Gestao_DripArt
+```
+
+### 2. Instale as dependências Python
+
+```bash
+pip install flask reportlab pillow werkzeug
+```
+
+### 3. Compile o Frontend (opcional — já há uma build em `/dist`)
+
+```bash
+cd decor-venue-flow-main
+npm install
+npm run build
+cd ..
+```
+
+### 4. Inicie o servidor
+
+```bash
+python app.py
+```
+
+Acesse: **http://localhost:5000**
+
 ---
 
-## Estrutura do Projeto
+## 🗂️ Estrutura do Projeto
 
 ```
 Projeto_Gestao_DripArt/
@@ -158,9 +180,10 @@ Se a chave PIX (WhatsApp/CNPJ) estiver cadastrada em **Configurações**, todos 
 
 > **Nota**: Implementações pendentes
 
+> **Nota:** Implementações ainda são necessarias.
 ---
 
-## ⚙️ Stack Tecnológica
+## Stack Tecnológica
 
 ### Backend
 
@@ -187,7 +210,7 @@ Se a chave PIX (WhatsApp/CNPJ) estiver cadastrada em **Configurações**, todos 
 
 ---
 
-## 📡 API REST — Endpoints Principais
+## API REST — Endpoints Principais
 
 | Método        | Rota                         | Descrição                 |
 | -------------- | ---------------------------- | --------------------------- |
@@ -231,6 +254,6 @@ Este projeto está sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) par
 
 <div align="center">
 
-Pensado e desenvolvido com 💜 para a **DripArt Impressão e Decoração**
+Desenvolvido com 💜 para a **DripArt Impressão e Decoração**
 
 </div>
