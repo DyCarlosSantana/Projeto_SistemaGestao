@@ -1,6 +1,14 @@
 from flask import Flask, request, jsonify, send_file, render_template, make_response
 from database import get_db, init_db
+from auth import require_auth, require_admin, gerar_token, get_current_user
 import datetime, os, json
+
+# Carrega variáveis de ambiente do .env (se existir)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv opcional em desenvolvimento local
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -88,13 +96,23 @@ def login():
         return jsonify({'erro': 'Senha incorreta'}), 401
     
     del user['senha_hash']
+    token = gerar_token(user)
     return jsonify({
-        'ok': True, 
-        'token': f"drip_{user['id']}_{user['role']}",
+        'ok': True,
+        'token': token,
         'user': user
     })
 
+@app.route('/api/me', methods=['GET'])
+@require_auth
+def me():
+    """Retorna os dados do usuário autenticado pela sessão JWT atual."""
+    return jsonify(get_current_user())
+
+
 @app.route('/api/usuarios', methods=['GET'])
+@require_auth
+@require_admin
 def listar_usuarios():
     db = get_db()
     rows = db.execute("SELECT id, nome, email, role, ativo, criado_em FROM usuarios WHERE ativo=1").fetchall()
@@ -102,6 +120,8 @@ def listar_usuarios():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/usuarios', methods=['POST'])
+@require_auth
+@require_admin
 def criar_usuario():
     d = request.get_json(force=True, silent=True) or {}
     senha = d.get('senha', '')
@@ -123,6 +143,8 @@ def criar_usuario():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/usuarios/<int:id>', methods=['PUT'])
+@require_auth
+@require_admin
 def atualizar_usuario(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -145,6 +167,8 @@ def atualizar_usuario(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/usuarios/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_usuario(id):
     db = get_db()
     row = db.execute("SELECT role FROM usuarios WHERE id=?", (id,)).fetchone()
@@ -162,10 +186,13 @@ def deletar_usuario(id):
 # ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────────
 
 @app.route('/api/configuracoes', methods=['GET'])
+@require_auth
 def ler_configuracoes():
     return jsonify(get_config())
 
 @app.route('/api/configuracoes', methods=['POST'])
+@require_auth
+@require_admin
 def salvar_configuracoes():
     db = get_db()
     data = request.get_json(force=True, silent=True) or {}
@@ -181,6 +208,7 @@ def salvar_configuracoes():
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
 @app.route('/api/dashboard')
+@require_auth
 def dashboard():
     db = get_db()
     hoje = datetime.date.today().isoformat()
@@ -297,6 +325,7 @@ def dashboard():
 # ─── CLIENTES ─────────────────────────────────────────────────────────────────
 
 @app.route('/api/clientes', methods=['GET'])
+@require_auth
 def listar_clientes():
     db = get_db()
     q = request.args.get('q', '')
@@ -308,6 +337,7 @@ def listar_clientes():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/clientes', methods=['POST'])
+@require_auth
 def criar_cliente():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -321,6 +351,7 @@ def criar_cliente():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/clientes/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_cliente(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -334,6 +365,8 @@ def atualizar_cliente(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/clientes/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_cliente(id):
     db = get_db()
     db.execute("DELETE FROM clientes WHERE id=?", (id,))
@@ -342,6 +375,7 @@ def deletar_cliente(id):
     return jsonify({'ok': True})
 
 @app.route('/api/clientes/<int:id>/historico')
+@require_auth
 def historico_cliente(id):
     db = get_db()
     cliente = row_to_dict(db.execute("SELECT * FROM clientes WHERE id=?", (id,)).fetchone())
@@ -374,6 +408,7 @@ def historico_cliente(id):
 # ─── PRODUTOS ─────────────────────────────────────────────────────────────────
 
 @app.route('/api/produtos', methods=['GET'])
+@require_auth
 def listar_produtos():
     db = get_db()
     q = request.args.get('q', '')
@@ -385,6 +420,7 @@ def listar_produtos():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/produtos', methods=['POST'])
+@require_auth
 def criar_produto():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -398,6 +434,7 @@ def criar_produto():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/produtos/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_produto(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -411,6 +448,8 @@ def atualizar_produto(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/produtos/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_produto(id):
     db = get_db()
     db.execute("UPDATE produtos SET ativo=0 WHERE id=?", (id,))
@@ -421,6 +460,7 @@ def deletar_produto(id):
 # ─── MATERIAIS E ACABAMENTOS ───────────────────────────────────────────────────
 
 @app.route('/api/materiais', methods=['GET'])
+@require_auth
 def listar_materiais():
     db = get_db()
     rows = db.execute("SELECT * FROM materiais_impressao WHERE ativo=1 ORDER BY nome").fetchall()
@@ -428,6 +468,7 @@ def listar_materiais():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/materiais', methods=['POST'])
+@require_auth
 def criar_material():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -441,6 +482,7 @@ def criar_material():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/materiais/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_material(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -454,6 +496,8 @@ def atualizar_material(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/materiais/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_material(id):
     db = get_db()
     db.execute("UPDATE materiais_impressao SET ativo=0 WHERE id=?", (id,))
@@ -462,6 +506,7 @@ def deletar_material(id):
     return jsonify({'ok': True})
 
 @app.route('/api/acabamentos', methods=['GET'])
+@require_auth
 def listar_acabamentos():
     db = get_db()
     rows = db.execute("SELECT * FROM acabamentos WHERE ativo=1 ORDER BY nome").fetchall()
@@ -469,6 +514,7 @@ def listar_acabamentos():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/calcular-impressao', methods=['POST'])
+@require_auth
 def calcular_impressao():
     d = request.get_json(force=True, silent=True) or {}
     material_id = d.get('material_id')
@@ -532,6 +578,7 @@ def calcular_impressao():
 # ─── VENDAS / PDV ─────────────────────────────────────────────────────────────
 
 @app.route('/api/vendas', methods=['GET'])
+@require_auth
 def listar_vendas():
     db = get_db()
     data_ini = request.args.get('data_ini', '')
@@ -566,6 +613,7 @@ def listar_vendas():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/vendas', methods=['POST'])
+@require_auth
 def criar_venda():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -594,6 +642,7 @@ def criar_venda():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/vendas/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_venda(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -616,6 +665,8 @@ def atualizar_venda(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/vendas/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_venda(id):
     db = get_db()
     db.execute("DELETE FROM venda_itens WHERE venda_id=?", (id,))
@@ -625,6 +676,7 @@ def deletar_venda(id):
     return jsonify({'ok': True})
 
 @app.route('/api/vendas/<int:id>/itens')
+@require_auth
 def itens_venda(id):
     db = get_db()
     rows = db.execute("SELECT * FROM venda_itens WHERE venda_id=?", (id,)).fetchall()
@@ -632,6 +684,7 @@ def itens_venda(id):
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/vendas/<int:id>/pdf')
+@require_auth
 def pdf_venda(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado. Rode: pip install reportlab'}), 503
@@ -650,6 +703,7 @@ def pdf_venda(id):
 
 
 @app.route('/api/vendas/<int:id>/quitar', methods=['PUT'])
+@require_auth
 def quitar_venda(id):
     db = get_db()
     db.execute("UPDATE vendas SET status='pago', forma_pagamento=? WHERE id=?",
@@ -662,6 +716,7 @@ def quitar_venda(id):
 # ─── PDF ENCOMENDA ────────────────────────────────────────────────────────────
 
 @app.route('/api/agenda', methods=['GET'])
+@require_auth
 def listar_agenda():
     db = get_db()
     mes = request.args.get('mes', datetime.date.today().strftime('%Y-%m'))
@@ -679,6 +734,7 @@ def listar_agenda():
     return jsonify(rows)
 
 @app.route('/api/agenda/proximos')
+@require_auth
 def proximos_eventos():
     db = get_db()
     hoje = datetime.date.today().isoformat()
@@ -691,6 +747,7 @@ def proximos_eventos():
     return jsonify(rows)
 
 @app.route('/api/agenda', methods=['POST'])
+@require_auth
 def criar_evento():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -708,6 +765,7 @@ def criar_evento():
     return jsonify(row), 201
 
 @app.route('/api/agenda/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_evento(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -724,6 +782,7 @@ def atualizar_evento(id):
     return jsonify(row)
 
 @app.route('/api/agenda/<int:id>', methods=['DELETE'])
+@require_auth
 def deletar_evento(id):
     db = get_db()
     db.execute("DELETE FROM agenda WHERE id=?", (id,))
@@ -734,6 +793,7 @@ def deletar_evento(id):
 # ─── LOCAÇÕES COM FILTRO DE DATA ──────────────────────────────────────────────
 
 @app.route('/api/locacoes/<int:id>/itens')
+@require_auth
 def itens_locacao_get(id):
     db = get_db()
     rows = rows_to_list(db.execute("SELECT * FROM locacao_itens WHERE locacao_id=?", (id,)).fetchall())
@@ -741,6 +801,7 @@ def itens_locacao_get(id):
     return jsonify(rows)
 
 @app.route('/api/locacoes', methods=['GET'])
+@require_auth
 def listar_locacoes():
     db = get_db()
     status = request.args.get('status', '')
@@ -763,6 +824,7 @@ def listar_locacoes():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/locacoes', methods=['POST'])
+@require_auth
 def criar_locacao():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -794,6 +856,7 @@ def criar_locacao():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/locacoes/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_locacao(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -815,6 +878,8 @@ def atualizar_locacao(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/locacoes/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_locacao(id):
     db = get_db()
     db.execute("DELETE FROM agenda WHERE locacao_id=?", (id,))
@@ -825,6 +890,7 @@ def deletar_locacao(id):
     return jsonify({'ok': True})
 
 @app.route('/api/locacoes/<int:id>/pdf')
+@require_auth
 def pdf_locacao(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado'}), 503
@@ -837,6 +903,7 @@ def pdf_locacao(id):
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
 @app.route('/api/locacoes/<int:id>/status', methods=['PUT'])
+@require_auth
 def atualizar_status_locacao(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -847,6 +914,7 @@ def atualizar_status_locacao(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/locacoes/<int:id>/converter', methods=['POST'])
+@require_auth
 def converter_locacao_venda(id):
     d = request.get_json(force=True, silent=True) or {}
     forma = d.get('forma_pagamento', 'dinheiro')
@@ -877,6 +945,7 @@ def converter_locacao_venda(id):
     return jsonify({'ok': True, 'venda_id': venda_id})
 
 @app.route('/api/itens-locacao', methods=['GET'])
+@require_auth
 def listar_itens_locacao():
     db = get_db()
     q = request.args.get('q', '')
@@ -888,6 +957,7 @@ def listar_itens_locacao():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/itens-locacao', methods=['POST'])
+@require_auth
 def criar_item_locacao():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -901,6 +971,7 @@ def criar_item_locacao():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/itens-locacao/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_item_locacao(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -914,6 +985,8 @@ def atualizar_item_locacao(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/itens-locacao/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_item_locacao(id):
     db = get_db()
     db.execute("UPDATE itens_locacao SET ativo=0 WHERE id=?", (id,))
@@ -922,6 +995,7 @@ def deletar_item_locacao(id):
     return jsonify({'ok': True})
 
 @app.route('/api/kits', methods=['GET'])
+@require_auth
 def listar_kits():
     db = get_db()
     kits = rows_to_list(db.execute("SELECT * FROM kits_locacao WHERE ativo=1 ORDER BY nome").fetchall())
@@ -936,6 +1010,7 @@ def listar_kits():
     return jsonify(kits)
 
 @app.route('/api/kits', methods=['POST'])
+@require_auth
 def criar_kit():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -953,6 +1028,7 @@ def criar_kit():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/kits/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_kit(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -968,6 +1044,8 @@ def atualizar_kit(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/kits/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_kit(id):
     db = get_db()
     db.execute("DELETE FROM kit_itens WHERE kit_id=?", (id,))
@@ -979,6 +1057,7 @@ def deletar_kit(id):
 # ─── ORÇAMENTOS ───────────────────────────────────────────────────────────────
 
 @app.route('/api/orcamentos', methods=['GET'])
+@require_auth
 def listar_orcamentos():
     db = get_db()
     rows = db.execute("SELECT * FROM orcamentos ORDER BY criado_em DESC LIMIT 100").fetchall()
@@ -986,6 +1065,7 @@ def listar_orcamentos():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/orcamentos', methods=['POST'])
+@require_auth
 def criar_orcamento():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1012,6 +1092,7 @@ def criar_orcamento():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/orcamentos/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_orcamento(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1031,6 +1112,8 @@ def atualizar_orcamento(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/orcamentos/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_orcamento(id):
     db = get_db()
     db.execute("DELETE FROM orcamento_itens WHERE orcamento_id=?", (id,))
@@ -1040,6 +1123,7 @@ def deletar_orcamento(id):
     return jsonify({'ok': True})
 
 @app.route('/api/orcamentos/<int:id>/itens')
+@require_auth
 def itens_orcamento(id):
     db = get_db()
     rows = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
@@ -1047,6 +1131,7 @@ def itens_orcamento(id):
     return jsonify(rows)
 
 @app.route('/api/orcamentos/<int:id>/status', methods=['PUT'])
+@require_auth
 def atualizar_status_orcamento(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1057,6 +1142,7 @@ def atualizar_status_orcamento(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/orcamentos/<int:id>/pdf')
+@require_auth
 def pdf_orcamento(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado. Rode: pip install reportlab'}), 503
@@ -1071,6 +1157,7 @@ def pdf_orcamento(id):
 # ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
 
 @app.route('/api/relatorios/resumo')
+@require_auth
 def relatorio_resumo():
     db = get_db()
     data_ini = request.args.get('data_ini', datetime.date.today().replace(day=1).isoformat())
@@ -1115,6 +1202,7 @@ def relatorio_resumo():
 
 
 @app.route('/api/despesas', methods=['GET'])
+@require_auth
 def listar_despesas():
     db = get_db()
     data_ini = request.args.get('data_ini', '')
@@ -1127,6 +1215,7 @@ def listar_despesas():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/despesas', methods=['POST'])
+@require_auth
 def criar_despesa():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1141,6 +1230,7 @@ def criar_despesa():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/despesas/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_despesa(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1155,6 +1245,7 @@ def atualizar_despesa(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/despesas/<int:id>', methods=['DELETE'])
+@require_auth
 def deletar_despesa(id):
     db = get_db()
     db.execute("DELETE FROM despesas WHERE id=?", (id,))
@@ -1163,6 +1254,7 @@ def deletar_despesa(id):
     return jsonify({'ok': True})
 
 @app.route('/api/fluxo-caixa')
+@require_auth
 def fluxo_caixa():
     db = get_db()
     data_ini = request.args.get('data_ini', datetime.date.today().replace(day=1).isoformat())
@@ -1197,6 +1289,7 @@ def proximo_numero_encomenda():
     return f"ENC-{n:04d}"
 
 @app.route('/api/encomendas', methods=['GET'])
+@require_auth
 def listar_encomendas():
     db = get_db()
     status = request.args.get('status', '')
@@ -1224,6 +1317,7 @@ def listar_encomendas():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/encomendas/todas', methods=['GET'])
+@require_auth
 def todas_encomendas():
     db = get_db()
     rows = db.execute("SELECT * FROM encomendas ORDER BY criado_em DESC LIMIT 100").fetchall()
@@ -1231,6 +1325,7 @@ def todas_encomendas():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/encomendas', methods=['POST'])
+@require_auth
 def criar_encomenda():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1255,6 +1350,7 @@ def criar_encomenda():
 
 
 @app.route('/api/encomendas/<int:id>/status', methods=['PUT'])
+@require_auth
 def atualizar_status_encomenda(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1265,6 +1361,7 @@ def atualizar_status_encomenda(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/encomendas/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_encomenda(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1280,6 +1377,8 @@ def atualizar_encomenda(id):
 
 
 @app.route('/api/encomendas/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_encomenda(id):
     db = get_db()
     db.execute("DELETE FROM agenda WHERE encomenda_id=?", (id,))
@@ -1291,6 +1390,7 @@ def deletar_encomenda(id):
 # ─── SERVIÇOS ─────────────────────────────────────────────────────────────────
 
 @app.route('/api/servicos', methods=['GET'])
+@require_auth
 def listar_servicos():
     db = get_db()
     q = request.args.get('q', '')
@@ -1302,6 +1402,7 @@ def listar_servicos():
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/servicos', methods=['POST'])
+@require_auth
 def criar_servico():
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1315,6 +1416,7 @@ def criar_servico():
     return jsonify(row_to_dict(row)), 201
 
 @app.route('/api/servicos/<int:id>', methods=['PUT'])
+@require_auth
 def atualizar_servico(id):
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
@@ -1328,6 +1430,8 @@ def atualizar_servico(id):
     return jsonify(row_to_dict(row))
 
 @app.route('/api/servicos/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
 def deletar_servico(id):
     db = get_db()
     db.execute("UPDATE servicos SET ativo=0 WHERE id=?", (id,))
@@ -1336,6 +1440,7 @@ def deletar_servico(id):
     return jsonify({'ok': True})
 
 @app.route('/api/relatorios/exportar')
+@require_auth
 def exportar_relatorio():
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado'}), 503
@@ -1362,6 +1467,7 @@ def exportar_relatorio():
 # ─── ORÇAMENTO → VENDA ────────────────────────────────────────────────────────
 
 @app.route('/api/orcamentos/<int:id>/converter', methods=['POST'])
+@require_auth
 def converter_orcamento_venda(id):
     db = get_db()
     orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone())
@@ -1392,6 +1498,7 @@ def converter_orcamento_venda(id):
 # ─── ENCOMENDA → VENDA ────────────────────────────────────────────────────────
 
 @app.route('/api/encomendas/<int:id>/converter', methods=['POST'])
+@require_auth
 def converter_encomenda_venda(id):
     db = get_db()
     enc = row_to_dict(db.execute("SELECT * FROM encomendas WHERE id=?", (id,)).fetchone())
@@ -1420,6 +1527,7 @@ def converter_encomenda_venda(id):
 # ─── DASHBOARD EVOLUÇÃO MENSAL ────────────────────────────────────────────────
 
 @app.route('/api/dashboard/evolucao')
+@require_auth
 def dashboard_evolucao():
     db = get_db()
     meses = []
@@ -1443,6 +1551,7 @@ def dashboard_evolucao():
 # ─── TOP CLIENTES ─────────────────────────────────────────────────────────────
 
 @app.route('/api/clientes/top')
+@require_auth
 def top_clientes():
     db = get_db()
     periodo = request.args.get('periodo', 'mes')
@@ -1468,6 +1577,7 @@ def top_clientes():
 # ─── DISPONIBILIDADE DE ITENS POR DATA ────────────────────────────────────────
 
 @app.route('/api/itens-locacao/<int:id>/disponibilidade')
+@require_auth
 def disponibilidade_item(id):
     db = get_db()
     item = row_to_dict(db.execute("SELECT * FROM itens_locacao WHERE id=?", (id,)).fetchone())
@@ -1498,6 +1608,8 @@ def disponibilidade_item(id):
 # ─── BACKUP MANUAL ────────────────────────────────────────────────────────────
 
 @app.route('/api/backup', methods=['POST'])
+@require_auth
+@require_admin
 def backup_manual():
     import shutil
     try:
@@ -1794,5 +1906,5 @@ def serve_react(path):
 if __name__ == '__main__':
     init_db()
     fazer_backup()
-    print("DripArt iniciando em http://localhost:5000")
+    print("Dycore SaaS iniciando em http://localhost:5000")
     app.run(debug=False, port=5000, host='0.0.0.0')

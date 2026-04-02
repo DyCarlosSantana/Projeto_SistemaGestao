@@ -1,0 +1,23 @@
+# Dycore — Backend Dependencies
+# Instale com: pip install -r requirements.txt
+
+# Web Framework
+flask>=3.0.0
+flask-jwt-extended>=4.7.0
+flask-cors>=4.0.0
+
+# Segurança e Autenticação
+werkzeug>=3.0.0
+python-dotenv>=1.0.0
+
+# Banco de Dados (atual: SQLite; futuro: PostgreSQL com SQLAlchemy)
+# SQLAlchemy>=2.0.0      # Fase 4 — ativar ao migrar para PostgreSQL
+# psycopg2-binary>=2.9.0 # Fase 4 — ativar ao usar PostgreSQL
+# alembic>=1.13.0        # Fase 4 — migrações versionadas
+
+# Geração de PDF
+reportlab>=4.0.0
+pillow>=10.0.0
+
+# Pagamentos (Fase 6)
+# pagarme>=1.0.0         # Fase 6 — integração Pagar.me

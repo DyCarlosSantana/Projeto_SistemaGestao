@@ -31,8 +31,8 @@ export default function Login() {
         throw new Error(data.erro || "Falha no login");
       }
 
-      login(data.user);
-      localStorage.setItem("drip_token", data.token); // Optional: if want to send in api.ts
+      // Passa o user E o token JWT para o AuthContext
+      login(data.user, data.token);
       toast.success(`Bem-vindo, ${data.user.nome}!`);
       
     } catch (err: any) {
@@ -50,7 +50,7 @@ export default function Login() {
             <Lock className="h-7 w-7 text-purple" />
           </div>
           <h2 className="font-display text-3xl font-bold tracking-tight text-foreground">
-            Drip<span className="text-purple">Art</span>
+            Dy<span className="text-purple">core</span>
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Acesso Restrito. Faça login para continuar.
@@ -67,7 +67,7 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ex: admin@dripart.com"
+                placeholder="ex: admin@dycore.com"
                 className="h-12"
               />
             </div>

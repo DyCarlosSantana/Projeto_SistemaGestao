@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dripArt.db')
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dycore.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -312,7 +312,7 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM configuracoes")
     if c.fetchone()[0] == 0:
         c.executemany("INSERT INTO configuracoes (chave, valor) VALUES (?,?)", [
-            ("empresa_nome", "DripArt"),
+            ("empresa_nome", "Dycore"),
             ("empresa_telefone", ""),
             ("empresa_email", ""),
             ("empresa_endereco", ""),
@@ -329,7 +329,7 @@ def init_db():
         from werkzeug.security import generate_password_hash
         senha_admin = generate_password_hash('123456')
         c.execute("INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?,?,?,?)",
-                 ("Administrador", "admin@dripart.com", senha_admin, "admin"))
+                 ("Administrador", "admin@dycore.com", senha_admin, "admin"))
 
     try:
         c.execute("ALTER TABLE produtos ADD COLUMN imagem_url TEXT")

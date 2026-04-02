@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { setToken, clearToken, setUnauthorizedCallback } from '@/lib/apiClient';
 
 type UserRole = 'admin' | 'operador';
 
@@ -11,40 +12,57 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (u: User) => void;
+  login: (u: User, token: string) => void;
   logout: () => void;
+  isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({} as any);
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+const USER_STORAGE_KEY = 'dycore_user';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem('gestao_user');
+    // Restaura sessão ao recarregar a página
+    const saved = sessionStorage.getItem(USER_STORAGE_KEY);
     if (saved) {
       try {
         setUser(JSON.parse(saved));
-      } catch {}
+      } catch {
+        sessionStorage.removeItem(USER_STORAGE_KEY);
+        clearToken();
+      }
     }
     setLoading(false);
   }, []);
 
-  const login = (u: User) => {
+  useEffect(() => {
+    // Registra callback para logout automático quando JWT expirar (401)
+    setUnauthorizedCallback(() => {
+      setUser(null);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    });
+  }, []);
+
+  const login = (u: User, token: string) => {
     setUser(u);
-    localStorage.setItem('gestao_user', JSON.stringify(u));
+    setToken(token);
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(u));
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('gestao_user');
+    clearToken();
+    sessionStorage.removeItem(USER_STORAGE_KEY);
   };
 
   if (loading) return null;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
