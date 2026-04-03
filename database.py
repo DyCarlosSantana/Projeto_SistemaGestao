@@ -15,8 +15,20 @@ def init_db():
     c = conn.cursor()
 
     c.executescript("""
+    CREATE TABLE IF NOT EXISTS empresas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cnpj TEXT,
+        email TEXT,
+        telefone TEXT,
+        plano TEXT DEFAULT 'basico',
+        ativo INTEGER DEFAULT 1,
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS clientes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         telefone TEXT,
         email TEXT,
@@ -28,6 +40,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS materiais_impressao (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         preco_m2 REAL NOT NULL,
         ativo INTEGER DEFAULT 1
@@ -35,6 +48,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS acabamentos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         preco_unitario REAL NOT NULL,
         ativo INTEGER DEFAULT 1
@@ -42,6 +56,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS produtos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         descricao TEXT,
         categoria TEXT,
@@ -52,6 +67,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         senha_hash TEXT NOT NULL,
@@ -62,6 +78,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS itens_locacao (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         descricao TEXT,
         categoria TEXT,
@@ -72,6 +89,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS kits_locacao (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         descricao TEXT,
         preco_total REAL NOT NULL,
@@ -80,6 +98,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS kit_itens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         kit_id INTEGER NOT NULL REFERENCES kits_locacao(id),
         item_id INTEGER NOT NULL REFERENCES itens_locacao(id),
         quantidade INTEGER DEFAULT 1
@@ -87,6 +106,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS vendas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         cliente_id INTEGER REFERENCES clientes(id),
         cliente_nome TEXT,
         tipo TEXT NOT NULL,
@@ -102,6 +122,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS venda_itens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         venda_id INTEGER NOT NULL REFERENCES vendas(id),
         descricao TEXT NOT NULL,
         quantidade REAL DEFAULT 1,
@@ -111,6 +132,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS locacoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         cliente_id INTEGER REFERENCES clientes(id),
         cliente_nome TEXT NOT NULL,
         tipo TEXT DEFAULT 'item',
@@ -126,6 +148,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS locacao_itens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         locacao_id INTEGER NOT NULL REFERENCES locacoes(id),
         item_id INTEGER REFERENCES itens_locacao(id),
         kit_id INTEGER REFERENCES kits_locacao(id),
@@ -137,6 +160,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS orcamentos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         numero TEXT UNIQUE NOT NULL,
         cliente_id INTEGER REFERENCES clientes(id),
         cliente_nome TEXT,
@@ -151,6 +175,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS orcamento_itens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         orcamento_id INTEGER NOT NULL REFERENCES orcamentos(id),
         descricao TEXT NOT NULL,
         quantidade REAL DEFAULT 1,
@@ -159,12 +184,15 @@ def init_db():
     );
 
     CREATE TABLE IF NOT EXISTS configuracoes (
-        chave TEXT PRIMARY KEY,
-        valor TEXT
+        empresa_id INTEGER DEFAULT 1,
+        chave TEXT NOT NULL,
+        valor TEXT,
+        PRIMARY KEY (empresa_id, chave)
     );
 
     CREATE TABLE IF NOT EXISTS despesas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         descricao TEXT NOT NULL,
         categoria TEXT DEFAULT 'geral',
         valor REAL NOT NULL,
@@ -176,6 +204,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS encomendas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         numero TEXT UNIQUE NOT NULL,
         cliente_id INTEGER REFERENCES clientes(id),
         cliente_nome TEXT NOT NULL,
@@ -191,6 +220,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS servicos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         descricao TEXT,
         categoria TEXT,
@@ -201,6 +231,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS agenda (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         titulo TEXT NOT NULL,
         tipo TEXT DEFAULT 'compromisso',
         data_inicio DATE NOT NULL,
@@ -218,6 +249,7 @@ def init_db():
 
     CREATE TABLE IF NOT EXISTS usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         senha_hash TEXT NOT NULL,
@@ -227,8 +259,22 @@ def init_db():
     );
     """)
 
+    # ─── MIGRAÇÕES PARA BANCO EXISTENTE ─────────────────────────────────────────
+    # Tabela de empresas (multi-tenancy - Fase 3)
+    tables_to_migrate = [
+        'clientes', 'materiais_impressao', 'acabamentos', 'produtos',
+        'usuarios', 'itens_locacao', 'kits_locacao', 'kit_itens',
+        'vendas', 'venda_itens', 'locacoes', 'locacao_itens',
+        'orcamentos', 'orcamento_itens', 'despesas', 'encomendas',
+        'servicos', 'agenda', 'configuracoes'
+    ]
+    for table in tables_to_migrate:
+        try:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN empresa_id INTEGER DEFAULT 1")
+        except: pass
+
     # Dados iniciais
-    # Migrations para banco já existente
+    # Migrações para banco já existente
     try:
         c.execute("ALTER TABLE vendas ADD COLUMN data_vencimento DATE")
     except: pass
@@ -276,6 +322,23 @@ def init_db():
     try:
         c.execute("ALTER TABLE encomendas ADD COLUMN sinal REAL DEFAULT 0")
     except: pass
+
+    # Empresa padrão (Dycore) para tenants existentes
+    c.execute("SELECT COUNT(*) FROM empresas")
+    if c.fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO empresas (nome, plano, ativo) VALUES (?,?,?)",
+            ('Dycore', 'basico', 1)
+        )
+        # Atualiza todos os registros existentes para empresa_id=1
+        for table in ['clientes','materiais_impressao','acabamentos','produtos',
+                      'usuarios','itens_locacao','kits_locacao','kit_itens',
+                      'vendas','venda_itens','locacoes','locacao_itens',
+                      'orcamentos','orcamento_itens','despesas','encomendas',
+                      'servicos','agenda','configuracoes']:
+            try:
+                c.execute(f"UPDATE {table} SET empresa_id=1 WHERE empresa_id IS NULL OR empresa_id=0")
+            except: pass
 
     c.execute("SELECT COUNT(*) FROM materiais_impressao")
     if c.fetchone()[0] == 0:

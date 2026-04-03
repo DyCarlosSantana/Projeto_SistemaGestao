@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_file, render_template, make_response
 from database import get_db, init_db
-from auth import require_auth, require_admin, gerar_token, get_current_user
+from auth import require_auth, require_admin, gerar_token, get_current_user, get_empresa_id
 import datetime, os, json
 
 # Carrega variáveis de ambiente do .env (se existir)
@@ -53,25 +53,114 @@ def row_to_dict(row):
 def rows_to_list(rows):
     return [dict(r) for r in rows]
 
-def get_config():
+def get_config(eid: int = 1):
     db = get_db()
-    rows = db.execute("SELECT chave, valor FROM configuracoes").fetchall()
+    rows = db.execute("SELECT chave, valor FROM configuracoes WHERE empresa_id=?", (eid,)).fetchall()
     db.close()
     return {r['chave']: r['valor'] for r in rows}
 
-def proximo_numero_orcamento():
+def proximo_numero_orcamento(eid: int = 1):
     db = get_db()
-    row = db.execute("SELECT COUNT(*) as c FROM orcamentos").fetchone()
+    row = db.execute("SELECT COUNT(*) as c FROM orcamentos WHERE empresa_id=?", (eid,)).fetchone()
     n = (row['c'] or 0) + 1
     db.close()
     return f"ORC-{n:04d}"
 
-def proximo_numero_encomenda():
+def proximo_numero_encomenda(eid: int = 1):
     db = get_db()
-    row = db.execute("SELECT COUNT(*) as c FROM encomendas").fetchone()
+    row = db.execute("SELECT COUNT(*) as c FROM encomendas WHERE empresa_id=?", (eid,)).fetchone()
     n = (row['c'] or 0) + 1
     db.close()
     return f"ENC-{n:04d}"
+
+# ─── EMPRESAS (MULTI-TENANCY) ────────────────────────────────────────────
+
+@app.route('/api/empresas/registrar', methods=['POST'])
+def registrar_empresa():
+    """Endpoint público para cadastro de nova empresa (onboarding SaaS)."""
+    d = request.get_json(force=True, silent=True) or {}
+    nome = d.get('nome', '').strip()
+    email = d.get('email', '').strip()
+    senha = d.get('senha', '')
+    if not nome or not email or not senha:
+        return jsonify({'erro': 'Nome, email e senha são obrigatórios'}), 400
+
+    from werkzeug.security import generate_password_hash
+    db = get_db()
+    # Verifica se já existe usuário com este email
+    existing = db.execute("SELECT id FROM usuarios WHERE email=?", (email,)).fetchone()
+    if existing:
+        db.close()
+        return jsonify({'erro': 'Email já cadastrado'}), 409
+
+    try:
+        # Cria a empresa
+        cur = db.execute(
+            "INSERT INTO empresas (nome, cnpj, email, telefone, plano, ativo) VALUES (?,?,?,?,?,?)",
+            (nome, d.get('cnpj',''), email, d.get('telefone',''), 'basico', 1)
+        )
+        empresa_id = cur.lastrowid
+
+        # Cria o usuário admin da empresa
+        senha_hash = generate_password_hash(senha)
+        cur2 = db.execute(
+            "INSERT INTO usuarios (empresa_id, nome, email, senha_hash, role) VALUES (?,?,?,?,?)",
+            (empresa_id, d.get('nome_admin', nome), email, senha_hash, 'admin')
+        )
+        user_id = cur2.lastrowid
+
+        # Configurações padrão para a nova empresa
+        configs_padrao = [
+            (empresa_id, 'empresa_nome', nome),
+            (empresa_id, 'empresa_email', email),
+            (empresa_id, 'empresa_telefone', d.get('telefone','')),
+            (empresa_id, 'empresa_cnpj', d.get('cnpj','')),
+            (empresa_id, 'empresa_whatsapp', ''),
+            (empresa_id, 'empresa_instagram', ''),
+            (empresa_id, 'empresa_site', ''),
+            (empresa_id, 'empresa_endereco', ''),
+            (empresa_id, 'logo_path', ''),
+            (empresa_id, 'orcamento_validade_dias', '7'),
+        ]
+        db.executemany("INSERT OR IGNORE INTO configuracoes (empresa_id, chave, valor) VALUES (?,?,?)", configs_padrao)
+        db.commit()
+
+        user = {'id': user_id, 'nome': d.get('nome_admin', nome), 'email': email, 'role': 'admin', 'empresa_id': empresa_id}
+        token = gerar_token(user)
+        db.close()
+        return jsonify({'ok': True, 'empresa_id': empresa_id, 'token': token, 'user': user}), 201
+    except Exception as e:
+        db.close()
+        return jsonify({'erro': str(e)}), 400
+
+@app.route('/api/empresas/minha', methods=['GET'])
+@require_auth
+def minha_empresa():
+    """Retorna os dados da empresa do usuário autenticado."""
+    eid = get_empresa_id()
+    db = get_db()
+    empresa = row_to_dict(db.execute("SELECT * FROM empresas WHERE id=?", (eid,)).fetchone())
+    db.close()
+    if not empresa:
+        return jsonify({'erro': 'Empresa não encontrada'}), 404
+    return jsonify(empresa)
+
+@app.route('/api/empresas/minha', methods=['PUT'])
+@require_auth
+@require_admin
+def atualizar_empresa():
+    """Atualiza os dados cadastrais da empresa (somente admin)."""
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    db = get_db()
+    db.execute(
+        "UPDATE empresas SET nome=?, cnpj=?, email=?, telefone=? WHERE id=?",
+        (d.get('nome',''), d.get('cnpj',''), d.get('email',''), d.get('telefone',''), eid)
+    )
+    db.commit()
+    empresa = row_to_dict(db.execute("SELECT * FROM empresas WHERE id=?", (eid,)).fetchone())
+    db.close()
+    return jsonify(empresa)
 
 # ─── AUTENTICAÇÃO E USUÁRIOS ──────────────────────────────────────────────────
 
@@ -86,7 +175,10 @@ def login():
         return jsonify({'erro': 'Email e senha obrigatórios'}), 400
     
     db = get_db()
-    user = row_to_dict(db.execute("SELECT id, nome, email, role, ativo, senha_hash FROM usuarios WHERE email=?", (email,)).fetchone())
+    user = row_to_dict(db.execute(
+        "SELECT id, nome, email, role, ativo, senha_hash, empresa_id FROM usuarios WHERE email=?",
+        (email,)
+    ).fetchone())
     db.close()
     
     if not user or user.get('ativo') == 0:
@@ -96,7 +188,7 @@ def login():
         return jsonify({'erro': 'Senha incorreta'}), 401
     
     del user['senha_hash']
-    token = gerar_token(user)
+    token = gerar_token(user)  # inclui empresa_id no payload JWT
     return jsonify({
         'ok': True,
         'token': token,
@@ -114,8 +206,12 @@ def me():
 @require_auth
 @require_admin
 def listar_usuarios():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT id, nome, email, role, ativo, criado_em FROM usuarios WHERE ativo=1").fetchall()
+    rows = db.execute(
+        "SELECT id, nome, email, role, ativo, criado_em FROM usuarios WHERE ativo=1 AND empresa_id=?",
+        (eid,)
+    ).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
@@ -123,6 +219,7 @@ def listar_usuarios():
 @require_auth
 @require_admin
 def criar_usuario():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     senha = d.get('senha', '')
     senha_hash = generate_password_hash(senha) if senha else generate_password_hash('123456')
@@ -130,8 +227,8 @@ def criar_usuario():
     db = get_db()
     try:
         cur = db.execute(
-            "INSERT INTO usuarios (nome, email, senha_hash, role) VALUES (?, ?, ?, ?)",
-            (d.get('nome',''), d.get('email',''), senha_hash, d.get('role','operador'))
+            "INSERT INTO usuarios (empresa_id, nome, email, senha_hash, role) VALUES (?,?,?,?,?)",
+            (eid, d.get('nome',''), d.get('email',''), senha_hash, d.get('role','operador'))
         )
         db.commit()
         user_id = cur.lastrowid
@@ -146,19 +243,20 @@ def criar_usuario():
 @require_auth
 @require_admin
 def atualizar_usuario(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     
     if d.get('senha'):
         senha_hash = generate_password_hash(d['senha'])
         db.execute(
-            "UPDATE usuarios SET nome=?, email=?, role=?, senha_hash=? WHERE id=?",
-            (d.get('nome',''), d.get('email',''), d.get('role','operador'), senha_hash, id)
+            "UPDATE usuarios SET nome=?, email=?, role=?, senha_hash=? WHERE id=? AND empresa_id=?",
+            (d.get('nome',''), d.get('email',''), d.get('role','operador'), senha_hash, id, eid)
         )
     else:
         db.execute(
-            "UPDATE usuarios SET nome=?, email=?, role=? WHERE id=?",
-            (d.get('nome',''), d.get('email',''), d.get('role','operador'), id)
+            "UPDATE usuarios SET nome=?, email=?, role=? WHERE id=? AND empresa_id=?",
+            (d.get('nome',''), d.get('email',''), d.get('role','operador'), id, eid)
         )
         
     db.commit()
@@ -170,15 +268,18 @@ def atualizar_usuario(id):
 @require_auth
 @require_admin
 def deletar_usuario(id):
+    eid = get_empresa_id()
     db = get_db()
-    row = db.execute("SELECT role FROM usuarios WHERE id=?", (id,)).fetchone()
+    row = db.execute("SELECT role FROM usuarios WHERE id=? AND empresa_id=?", (id, eid)).fetchone()
     if row and row['role'] == 'admin':
-        admin_count = db.execute("SELECT COUNT(*) FROM usuarios WHERE role='admin' AND ativo=1").fetchone()[0]
+        admin_count = db.execute(
+            "SELECT COUNT(*) FROM usuarios WHERE role='admin' AND ativo=1 AND empresa_id=?", (eid,)
+        ).fetchone()[0]
         if admin_count <= 1:
             db.close()
             return jsonify({'erro': 'Não é possível remover o último administrador.'}), 400
 
-    db.execute("UPDATE usuarios SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE usuarios SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -188,18 +289,20 @@ def deletar_usuario(id):
 @app.route('/api/configuracoes', methods=['GET'])
 @require_auth
 def ler_configuracoes():
-    return jsonify(get_config())
+    eid = get_empresa_id()
+    return jsonify(get_config(eid))
 
 @app.route('/api/configuracoes', methods=['POST'])
 @require_auth
 @require_admin
 def salvar_configuracoes():
+    eid = get_empresa_id()
     db = get_db()
     data = request.get_json(force=True, silent=True) or {}
     for k, v in data.items():
         db.execute(
-            "INSERT INTO configuracoes (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor=?",
-            (k, str(v), str(v))
+            "INSERT INTO configuracoes (empresa_id, chave, valor) VALUES (?,?,?) ON CONFLICT(empresa_id, chave) DO UPDATE SET valor=?",
+            (eid, k, str(v), str(v))
         )
     db.commit()
     db.close()
@@ -210,50 +313,51 @@ def salvar_configuracoes():
 @app.route('/api/dashboard')
 @require_auth
 def dashboard():
+    eid = get_empresa_id()
     db = get_db()
     hoje = datetime.date.today().isoformat()
     mes_atual = hoje[:7]
 
     receita_mes = db.execute(
-        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE strftime('%Y-%m', criado_em)=? AND status='pago'",
-        (mes_atual,)
+        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE strftime('%Y-%m', criado_em)=? AND status='pago' AND empresa_id=?",
+        (mes_atual, eid)
     ).fetchone()['v']
 
     vendas_hoje = db.execute(
-        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE date(criado_em)=?",
-        (hoje,)
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE date(criado_em)=? AND empresa_id=?",
+        (hoje, eid)
     ).fetchone()
 
     locacoes_ativas = db.execute(
-        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo'"
+        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo' AND empresa_id=?", (eid,)
     ).fetchone()['c']
 
     locacoes_vencendo = db.execute(
-        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo' AND data_devolucao <= date('now','+3 days')"
+        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo' AND data_devolucao <= date('now','+3 days') AND empresa_id=?",
+        (eid,)
     ).fetchone()['c']
 
     orcamentos_abertos = db.execute(
-        "SELECT COUNT(*) as c FROM orcamentos WHERE status='aberto'"
+        "SELECT COUNT(*) as c FROM orcamentos WHERE status='aberto' AND empresa_id=?", (eid,)
     ).fetchone()['c']
 
     receita_categorias = db.execute("""
         SELECT tipo, COALESCE(SUM(total),0) as total
         FROM vendas
-        WHERE strftime('%Y-%m', criado_em)=? AND status='pago'
+        WHERE strftime('%Y-%m', criado_em)=? AND status='pago' AND empresa_id=?
         GROUP BY tipo
-    """, (mes_atual,)).fetchall()
+    """, (mes_atual, eid)).fetchall()
 
     ultimas_movs = db.execute("""
         SELECT 'venda' as origem, id, cliente_nome, tipo as descricao, total, status, criado_em
-        FROM vendas ORDER BY criado_em DESC LIMIT 5
-    """).fetchall()
+        FROM vendas WHERE empresa_id=? ORDER BY criado_em DESC LIMIT 5
+    """, (eid,)).fetchall()
 
     locacoes_recentes = db.execute("""
         SELECT id, cliente_nome, data_devolucao, total, status, criado_em
-        FROM locacoes ORDER BY criado_em DESC LIMIT 5
-    """).fetchall()
+        FROM locacoes WHERE empresa_id=? ORDER BY criado_em DESC LIMIT 5
+    """, (eid,)).fetchall()
 
-    # Alertas detalhados de locações
     alertas_locacao = rows_to_list(db.execute("""
         SELECT id, cliente_nome, data_devolucao, total,
                CASE
@@ -262,40 +366,42 @@ def dashboard():
                  ELSE 'em_breve'
                END as urgencia
         FROM locacoes
-        WHERE status='ativo' AND data_devolucao <= date('now','+3 days')
+        WHERE status='ativo' AND data_devolucao <= date('now','+3 days') AND empresa_id=?
         ORDER BY data_devolucao ASC
-    """).fetchall())
+    """, (eid,)).fetchall())
 
-    # Fiado em atraso e a vencer
     fiado_atrasado = db.execute(
-        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado' AND data_vencimento < date('now')"
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado' AND data_vencimento < date('now') AND empresa_id=?",
+        (eid,)
     ).fetchone()
     fiado_vencendo = db.execute(
-        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado' AND data_vencimento BETWEEN date('now') AND date('now','+7 days')"
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado' AND data_vencimento BETWEEN date('now') AND date('now','+7 days') AND empresa_id=?",
+        (eid,)
     ).fetchone()
     fiado_total = db.execute(
-        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado'"
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE status='fiado' AND empresa_id=?",
+        (eid,)
     ).fetchone()
 
-    # Saldo do caixa do mês
     mes_entradas = db.execute(
-        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE strftime('%Y-%m', criado_em)=? AND status='pago'",
-        (mes_atual,)
+        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE strftime('%Y-%m', criado_em)=? AND status='pago' AND empresa_id=?",
+        (mes_atual, eid)
     ).fetchone()['v']
     mes_saidas = db.execute(
-        "SELECT COALESCE(SUM(valor),0) as v FROM despesas WHERE strftime('%Y-%m', data)=?",
-        (mes_atual,)
+        "SELECT COALESCE(SUM(valor),0) as v FROM despesas WHERE strftime('%Y-%m', data)=? AND empresa_id=?",
+        (mes_atual, eid)
     ).fetchone()['v']
 
-    # Encomendas pendentes
     encomendas_pendentes = db.execute(
-        "SELECT COUNT(*) as c FROM encomendas WHERE status NOT IN ('entregue')"
+        "SELECT COUNT(*) as c FROM encomendas WHERE status NOT IN ('entregue') AND empresa_id=?", (eid,)
     ).fetchone()['c']
     encomendas_atrasadas = db.execute(
-        "SELECT COUNT(*) as c FROM encomendas WHERE status NOT IN ('entregue') AND data_entrega < date('now') AND data_entrega != ''"
+        "SELECT COUNT(*) as c FROM encomendas WHERE status NOT IN ('entregue') AND data_entrega < date('now') AND data_entrega != '' AND empresa_id=?",
+        (eid,)
     ).fetchone()['c']
     locacoes_atrasadas = db.execute(
-        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo' AND data_devolucao < date('now')"
+        "SELECT COUNT(*) as c FROM locacoes WHERE status='ativo' AND data_devolucao < date('now') AND empresa_id=?",
+        (eid,)
     ).fetchone()['c']
 
     db.close()
@@ -327,23 +433,25 @@ def dashboard():
 @app.route('/api/clientes', methods=['GET'])
 @require_auth
 def listar_clientes():
+    eid = get_empresa_id()
     db = get_db()
     q = request.args.get('q', '')
     if q:
-        rows = db.execute("SELECT * FROM clientes WHERE nome LIKE ? ORDER BY nome", (f'%{q}%',)).fetchall()
+        rows = db.execute("SELECT * FROM clientes WHERE empresa_id=? AND nome LIKE ? ORDER BY nome", (eid, f'%{q}%')).fetchall()
     else:
-        rows = db.execute("SELECT * FROM clientes ORDER BY nome").fetchall()
+        rows = db.execute("SELECT * FROM clientes WHERE empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/clientes', methods=['POST'])
 @require_auth
 def criar_cliente():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO clientes (nome, telefone, email, cpf_cnpj, endereco, obs) VALUES (?,?,?,?,?,?)",
-        (d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''))
+        "INSERT INTO clientes (empresa_id, nome, telefone, email, cpf_cnpj, endereco, obs) VALUES (?,?,?,?,?,?,?)",
+        (eid, d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''))
     )
     db.commit()
     row = db.execute("SELECT * FROM clientes WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -353,11 +461,12 @@ def criar_cliente():
 @app.route('/api/clientes/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_cliente(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE clientes SET nome=?, telefone=?, email=?, cpf_cnpj=?, endereco=?, obs=? WHERE id=?",
-        (d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''), id)
+        "UPDATE clientes SET nome=?, telefone=?, email=?, cpf_cnpj=?, endereco=?, obs=? WHERE id=? AND empresa_id=?",
+        (d.get('nome',''), d.get('telefone',''), d.get('email',''), d.get('cpf_cnpj',''), d.get('endereco',''), d.get('obs',''), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM clientes WHERE id=?", (id,)).fetchone()
@@ -368,8 +477,9 @@ def atualizar_cliente(id):
 @require_auth
 @require_admin
 def deletar_cliente(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("DELETE FROM clientes WHERE id=?", (id,))
+    db.execute("DELETE FROM clientes WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -377,22 +487,23 @@ def deletar_cliente(id):
 @app.route('/api/clientes/<int:id>/historico')
 @require_auth
 def historico_cliente(id):
+    eid = get_empresa_id()
     db = get_db()
-    cliente = row_to_dict(db.execute("SELECT * FROM clientes WHERE id=?", (id,)).fetchone())
+    cliente = row_to_dict(db.execute("SELECT * FROM clientes WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     if not cliente:
         db.close()
         return jsonify({'erro': 'Cliente não encontrado'}), 404
     vendas = rows_to_list(db.execute(
-        "SELECT id, tipo, total, forma_pagamento, status, criado_em FROM vendas WHERE cliente_id=? OR cliente_nome=? ORDER BY criado_em DESC",
-        (id, cliente['nome'])
+        "SELECT id, tipo, total, forma_pagamento, status, criado_em FROM vendas WHERE (cliente_id=? OR cliente_nome=?) AND empresa_id=? ORDER BY criado_em DESC",
+        (id, cliente['nome'], eid)
     ).fetchall())
     locacoes = rows_to_list(db.execute(
-        "SELECT id, data_retirada, data_devolucao, total, status, criado_em FROM locacoes WHERE cliente_id=? OR cliente_nome=? ORDER BY criado_em DESC",
-        (id, cliente['nome'])
+        "SELECT id, data_retirada, data_devolucao, total, status, criado_em FROM locacoes WHERE (cliente_id=? OR cliente_nome=?) AND empresa_id=? ORDER BY criado_em DESC",
+        (id, cliente['nome'], eid)
     ).fetchall())
     orcamentos = rows_to_list(db.execute(
-        "SELECT id, numero, total, status, validade, criado_em FROM orcamentos WHERE cliente_id=? OR cliente_nome=? ORDER BY criado_em DESC",
-        (id, cliente['nome'])
+        "SELECT id, numero, total, status, validade, criado_em FROM orcamentos WHERE (cliente_id=? OR cliente_nome=?) AND empresa_id=? ORDER BY criado_em DESC",
+        (id, cliente['nome'], eid)
     ).fetchall())
     total_gasto = sum(v['total'] for v in vendas if v['status'] == 'pago')
     db.close()
@@ -410,23 +521,25 @@ def historico_cliente(id):
 @app.route('/api/produtos', methods=['GET'])
 @require_auth
 def listar_produtos():
+    eid = get_empresa_id()
     db = get_db()
     q = request.args.get('q', '')
     if q:
-        rows = db.execute("SELECT * FROM produtos WHERE ativo=1 AND nome LIKE ? ORDER BY nome", (f'%{q}%',)).fetchall()
+        rows = db.execute("SELECT * FROM produtos WHERE ativo=1 AND empresa_id=? AND nome LIKE ? ORDER BY nome", (eid, f'%{q}%')).fetchall()
     else:
-        rows = db.execute("SELECT * FROM produtos WHERE ativo=1 ORDER BY nome").fetchall()
+        rows = db.execute("SELECT * FROM produtos WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/produtos', methods=['POST'])
 @require_auth
 def criar_produto():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO produtos (nome, descricao, categoria, preco_venda, estoque, imagem_url) VALUES (?,?,?,?,?,?)",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''))
+        "INSERT INTO produtos (empresa_id, nome, descricao, categoria, preco_venda, estoque, imagem_url) VALUES (?,?,?,?,?,?,?)",
+        (eid, d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''))
     )
     db.commit()
     row = db.execute("SELECT * FROM produtos WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -436,11 +549,12 @@ def criar_produto():
 @app.route('/api/produtos/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_produto(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE produtos SET nome=?, descricao=?, categoria=?, preco_venda=?, estoque=?, imagem_url=? WHERE id=?",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''), id)
+        "UPDATE produtos SET nome=?, descricao=?, categoria=?, preco_venda=?, estoque=?, imagem_url=? WHERE id=? AND empresa_id=?",
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_venda', 0), d.get('estoque',0), d.get('imagem_url',''), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM produtos WHERE id=?", (id,)).fetchone()
@@ -451,8 +565,9 @@ def atualizar_produto(id):
 @require_auth
 @require_admin
 def deletar_produto(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("UPDATE produtos SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE produtos SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -462,19 +577,21 @@ def deletar_produto(id):
 @app.route('/api/materiais', methods=['GET'])
 @require_auth
 def listar_materiais():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM materiais_impressao WHERE ativo=1 ORDER BY nome").fetchall()
+    rows = db.execute("SELECT * FROM materiais_impressao WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/materiais', methods=['POST'])
 @require_auth
 def criar_material():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO materiais_impressao (nome, preco_m2, custo_material, margem_lucro, tipo, preco_unidade) VALUES (?,?,?,?,?,?)",
-        (d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0))
+        "INSERT INTO materiais_impressao (empresa_id, nome, preco_m2, custo_material, margem_lucro, tipo, preco_unidade) VALUES (?,?,?,?,?,?,?)",
+        (eid, d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0))
     )
     db.commit()
     row = db.execute("SELECT * FROM materiais_impressao WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -484,11 +601,12 @@ def criar_material():
 @app.route('/api/materiais/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_material(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE materiais_impressao SET nome=?, preco_m2=?, custo_material=?, margem_lucro=?, tipo=?, preco_unidade=? WHERE id=?",
-        (d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0), id)
+        "UPDATE materiais_impressao SET nome=?, preco_m2=?, custo_material=?, margem_lucro=?, tipo=?, preco_unidade=? WHERE id=? AND empresa_id=?",
+        (d.get('nome',''), d.get('preco_m2',0), d.get('custo_material',0), d.get('margem_lucro',50), d.get('tipo','m2'), d.get('preco_unidade',0), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM materiais_impressao WHERE id=?", (id,)).fetchone()
@@ -499,8 +617,9 @@ def atualizar_material(id):
 @require_auth
 @require_admin
 def deletar_material(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("UPDATE materiais_impressao SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE materiais_impressao SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -508,8 +627,9 @@ def deletar_material(id):
 @app.route('/api/acabamentos', methods=['GET'])
 @require_auth
 def listar_acabamentos():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM acabamentos WHERE ativo=1 ORDER BY nome").fetchall()
+    rows = db.execute("SELECT * FROM acabamentos WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
@@ -580,6 +700,7 @@ def calcular_impressao():
 @app.route('/api/vendas', methods=['GET'])
 @require_auth
 def listar_vendas():
+    eid = get_empresa_id()
     db = get_db()
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
@@ -587,8 +708,8 @@ def listar_vendas():
     q_str = request.args.get('q', '')
     
     q = "SELECT * FROM vendas"
-    where = []
-    params = []
+    where = ["empresa_id=?"]
+    params = [eid]
     
     if data_ini and data_fim:
         where.append("date(criado_em) BETWEEN ? AND ?")
@@ -615,26 +736,27 @@ def listar_vendas():
 @app.route('/api/vendas', methods=['POST'])
 @require_auth
 def criar_venda():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     venc = d.get('data_vencimento') or (None if d.get('forma_pagamento') != 'fiado' else
            (datetime.date.today() + datetime.timedelta(days=30)).isoformat())
     cur = db.execute(
-        "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (d.get('cliente_id'), d.get('cliente_nome',''), d.get('tipo','venda'),
+        "INSERT INTO vendas (empresa_id, cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (eid, d.get('cliente_id'), d.get('cliente_nome',''), d.get('tipo','venda'),
          d.get('subtotal', 0), d.get('desconto', 0), d.get('total', 0),
          d.get('forma_pagamento',''), d.get('status','pago'), d.get('obs',''), venc)
     )
     venda_id = cur.lastrowid
     for item in d.get('itens', []):
         db.execute(
-            "INSERT INTO venda_itens (venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (venda_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO venda_itens (empresa_id, venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, venda_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
         if item.get('produto_id'):
             db.execute(
-                "UPDATE produtos SET estoque = MAX(0, estoque - ?) WHERE id=?",
-                (int(item['quantidade']), item['produto_id'])
+                "UPDATE produtos SET estoque = MAX(0, estoque - ?) WHERE id=? AND empresa_id=?",
+                (int(item['quantidade']), item['produto_id'], eid)
             )
     db.commit()
     row = db.execute("SELECT * FROM vendas WHERE id=?", (venda_id,)).fetchone()
@@ -644,20 +766,20 @@ def criar_venda():
 @app.route('/api/vendas/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_venda(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE vendas SET cliente_nome=?, tipo=?, subtotal=?, desconto=?, total=?, forma_pagamento=?, status=?, obs=? WHERE id=?",
+        "UPDATE vendas SET cliente_nome=?, tipo=?, subtotal=?, desconto=?, total=?, forma_pagamento=?, status=?, obs=? WHERE id=? AND empresa_id=?",
         (d.get('cliente_nome',''), d.get('tipo','venda'), d.get('subtotal', 0),
          d.get('desconto',0), d.get('total', 0), d.get('forma_pagamento',''),
-         d.get('status','pago'), d.get('obs',''), id)
+         d.get('status','pago'), d.get('obs',''), id, eid)
     )
-    # update items: delete and re-insert
     db.execute("DELETE FROM venda_itens WHERE venda_id=?", (id,))
     for item in d.get('itens', []):
         db.execute(
-            "INSERT INTO venda_itens (venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO venda_itens (empresa_id, venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
     db.commit()
     row = db.execute("SELECT * FROM vendas WHERE id=?", (id,)).fetchone()
@@ -668,9 +790,10 @@ def atualizar_venda(id):
 @require_auth
 @require_admin
 def deletar_venda(id):
+    eid = get_empresa_id()
     db = get_db()
     db.execute("DELETE FROM venda_itens WHERE venda_id=?", (id,))
-    db.execute("DELETE FROM vendas WHERE id=?", (id,))
+    db.execute("DELETE FROM vendas WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -686,13 +809,14 @@ def itens_venda(id):
 @app.route('/api/vendas/<int:id>/pdf')
 @require_auth
 def pdf_venda(id):
+    eid = get_empresa_id()
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado. Rode: pip install reportlab'}), 503
     db = get_db()
-    venda = row_to_dict(db.execute("SELECT * FROM vendas WHERE id=?", (id,)).fetchone())
+    venda = row_to_dict(db.execute("SELECT * FROM vendas WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     itens = rows_to_list(db.execute("SELECT * FROM venda_itens WHERE venda_id=?", (id,)).fetchall())
     db.close()
-    config = get_config()
+    config = get_config(eid)
     path = gerar_nota_venda_pdf(venda, itens, config)
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
@@ -718,30 +842,32 @@ def quitar_venda(id):
 @app.route('/api/agenda', methods=['GET'])
 @require_auth
 def listar_agenda():
+    eid = get_empresa_id()
     db = get_db()
     mes = request.args.get('mes', datetime.date.today().strftime('%Y-%m'))
     data_ini = request.args.get('data_ini', mes + '-01')
-    # Last day of month
     ano, m = int(mes.split('-')[0]), int(mes.split('-')[1])
     import calendar
     ultimo_dia = calendar.monthrange(ano, m)[1]
     data_fim = request.args.get('data_fim', f'{mes}-{ultimo_dia:02d}')
     rows = rows_to_list(db.execute(
-        "SELECT * FROM agenda WHERE data_inicio <= ? AND (data_fim >= ? OR data_fim IS NULL) ORDER BY data_inicio, hora_inicio",
-        (data_fim, data_ini)
+        "SELECT * FROM agenda WHERE empresa_id=? AND data_inicio <= ? AND (data_fim >= ? OR data_fim IS NULL) ORDER BY data_inicio, hora_inicio",
+        (eid, data_fim, data_ini)
     ).fetchall())
     db.close()
     return jsonify(rows)
 
+
 @app.route('/api/agenda/proximos')
 @require_auth
 def proximos_eventos():
+    eid = get_empresa_id()
     db = get_db()
     hoje = datetime.date.today().isoformat()
     fim = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
     rows = rows_to_list(db.execute(
-        "SELECT * FROM agenda WHERE data_inicio BETWEEN ? AND ? AND status != 'cancelado' ORDER BY data_inicio, hora_inicio LIMIT 10",
-        (hoje, fim)
+        "SELECT * FROM agenda WHERE empresa_id=? AND data_inicio BETWEEN ? AND ? AND status != 'cancelado' ORDER BY data_inicio, hora_inicio LIMIT 10",
+        (eid, hoje, fim)
     ).fetchall())
     db.close()
     return jsonify(rows)
