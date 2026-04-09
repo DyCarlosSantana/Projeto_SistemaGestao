@@ -1,6 +1,6 @@
 <div align="center">
 
-# DripArt — Sistema de Gestão
+# Dycore — Sistema de Gestão
 
 **Sistema de gestão completo para empresas de impressão gráfica, decoração e locação de itens.**
 Backend em Flask · Frontend em React + Vite · Banco de dados SQLite · PDFs com QR Code PIX
@@ -218,6 +218,6 @@ Este projeto está sob a licença **MIT**. Veja o arquivo [LICENSE](LICENSE) par
 
 <div align="center">
 
-Idealizado e desenvolvido com 💜 para a **DripArt Impressão e Decoração**
+Idealizado, plajejado e desenvolvido com 💜 para a **DripArt Impressão e Decoração**
 
 </div>
