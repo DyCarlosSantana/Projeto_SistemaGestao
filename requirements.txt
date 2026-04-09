@@ -10,10 +10,8 @@ flask-cors>=4.0.0
 werkzeug>=3.0.0
 python-dotenv>=1.0.0
 
-# Banco de Dados (atual: SQLite; futuro: PostgreSQL com SQLAlchemy)
-# SQLAlchemy>=2.0.0      # Fase 4 — ativar ao migrar para PostgreSQL
-# psycopg2-binary>=2.9.0 # Fase 4 — ativar ao usar PostgreSQL
-# alembic>=1.13.0        # Fase 4 — migrações versionadas
+# Banco de Dados — PostgreSQL (Neon.tech)
+psycopg2-binary>=2.9.0  # Driver PostgreSQL para Python
 
 # Geração de PDF
 reportlab>=4.0.0

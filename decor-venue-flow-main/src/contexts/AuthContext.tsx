@@ -45,6 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       sessionStorage.removeItem(USER_STORAGE_KEY);
     });
+
+    const handleAuthError = () => {
+      setUser(null);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    };
+    window.addEventListener("dycore:unauthorized", handleAuthError);
+    return () => window.removeEventListener("dycore:unauthorized", handleAuthError);
   }, []);
 
   const login = (u: User, token: string) => {

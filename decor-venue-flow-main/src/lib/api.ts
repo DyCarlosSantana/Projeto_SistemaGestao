@@ -34,11 +34,21 @@ async function request<T>(
       url.searchParams.set(k, String(v));
     });
   }
+  const token = sessionStorage.getItem('dycore_token');
+  const headers: Record<string, string> = {};
+  if (opts?.body) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(url.toString(), {
     method: opts?.method || (opts?.body ? "POST" : "GET"),
-    headers: opts?.body ? { "Content-Type": "application/json" } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
     body: opts?.body ? JSON.stringify(opts.body) : undefined,
   });
+
+  if (res.status === 401) {
+    sessionStorage.removeItem('dycore_token');
+    window.dispatchEvent(new Event('dycore:unauthorized'));
+  }
   if (!res.ok) {
     const details = await parseJsonSafe(res);
     throw new ApiError(`Erro HTTP ${res.status} em ${path}`, { status: res.status, details });

@@ -36,7 +36,7 @@ export function setUnauthorizedCallback(cb: () => void): void {
 }
 
 /** Função principal de fetch com JWT injetado automaticamente */
-async function fetchWithAuth(
+export async function fetchWithAuth(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> {

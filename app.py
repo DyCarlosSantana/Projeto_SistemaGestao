@@ -24,7 +24,7 @@ except ImportError:
     PDF_OK = False
     print("AVISO: reportlab nao encontrado. PDFs desabilitados.")
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/')
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/_static_hidden')
 
 # CORS manual - permite acesso do navegador local
 @app.after_request
@@ -36,13 +36,16 @@ def add_cors(response):
 
 @app.errorhandler(Exception)
 def handle_error(e):
-    import traceback
-    tb = traceback.format_exc()
-    print("ERRO:", tb)
-    # Don't catch 404/405 routing errors as 500
     from werkzeug.exceptions import HTTPException
+    
     if isinstance(e, HTTPException):
+        if e.code != 404:
+            import traceback
+            print("ERRO HTTP:", traceback.format_exc())
         return jsonify({'erro': e.description, 'tipo': e.name}), e.code
+        
+    import traceback
+    print("ERRO INTERNO:", traceback.format_exc())
     return jsonify({'erro': str(e), 'tipo': type(e).__name__}), 500
 
 # ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -209,7 +212,7 @@ def listar_usuarios():
     eid = get_empresa_id()
     db = get_db()
     rows = db.execute(
-        "SELECT id, nome, email, role, ativo, criado_em FROM usuarios WHERE ativo=1 AND empresa_id=?",
+        "SELECT id, nome, email, role, ativo, ultimo_login FROM usuarios WHERE ativo=1 AND empresa_id=?",
         (eid,)
     ).fetchall()
     db.close()
@@ -1916,11 +1919,13 @@ def fazer_backup():
 import csv, io
 
 @app.route('/api/dashboard/dre')
+@require_auth
 def get_dre():
+    eid = get_empresa_id()
     db = get_db()
-    vendas = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM vendas WHERE status='pago' GROUP BY mes").fetchall()
-    locacoes = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM locacoes WHERE status='pago' OR status='ativo' GROUP BY mes").fetchall()
-    despesas = db.execute("SELECT strftime('%Y-%m', data_vencimento) as mes, SUM(valor) as val FROM despesas WHERE status='pago' GROUP BY mes").fetchall()
+    vendas = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM vendas WHERE status='pago' AND empresa_id=? GROUP BY mes", (eid,)).fetchall()
+    locacoes = db.execute("SELECT strftime('%Y-%m', criado_em) as mes, SUM(total) as val FROM locacoes WHERE (status='pago' OR status='ativo') AND empresa_id=? GROUP BY mes", (eid,)).fetchall()
+    despesas = db.execute("SELECT strftime('%Y-%m', data) as mes, SUM(valor) as val FROM despesas WHERE empresa_id=? GROUP BY mes", (eid,)).fetchall()
     db.close()
     
     try:
@@ -1946,9 +1951,11 @@ def get_dre():
         return jsonify([])
 
 @app.route('/api/vendas/exportar')
+@require_auth
 def exportar_vendas_csv():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM vendas ORDER BY criado_em DESC").fetchall()
+    rows = db.execute("SELECT * FROM vendas WHERE empresa_id=? ORDER BY criado_em DESC", (eid,)).fetchall()
     db.close()
     
     si = io.StringIO()
@@ -1963,9 +1970,11 @@ def exportar_vendas_csv():
     return output
 
 @app.route('/api/locacoes/exportar')
+@require_auth
 def exportar_locacoes_csv():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM locacoes ORDER BY criado_em DESC").fetchall()
+    rows = db.execute("SELECT * FROM locacoes WHERE empresa_id=? ORDER BY criado_em DESC", (eid,)).fetchall()
     db.close()
     
     si = io.StringIO()
@@ -1980,28 +1989,30 @@ def exportar_locacoes_csv():
     return output
 
 @app.route('/api/orcamentos/<int:id>/converter-locacao', methods=['POST'])
+@require_auth
 def converter_orcamento_locacao(id):
+    eid = get_empresa_id()
     db = get_db()
-    orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone())
+    orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     if not orc: 
         db.close()
         return jsonify({'erro': 'Orçamento não encontrado'}), 404
         
-    itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
+    itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=? AND empresa_id=?", (id, eid)).fetchall())
     
     cur = db.execute(
-        "INSERT INTO locacoes (cliente_nome, tipo, data_retirada, data_devolucao, desconto, total, forma_pagamento, status) VALUES (?,?,?,?,?,?,?,?)",
-        (orc.get('cliente_nome',''), 'item', orc.get('criado_em',''), orc.get('validade',''), orc.get('desconto',0), orc.get('total',0), '', 'ativo')
+        "INSERT INTO locacoes (empresa_id, cliente_nome, tipo, data_retirada, data_devolucao, desconto, total, forma_pagamento, status) VALUES (?,?,?,?,?,?,?,?,?)",
+        (eid, orc.get('cliente_nome',''), 'item', orc.get('criado_em',''), orc.get('validade',''), orc.get('desconto',0), orc.get('total',0), '', 'ativo')
     )
     loc_id = cur.lastrowid
     
     for item in itens:
         db.execute(
-            "INSERT INTO locacao_itens (locacao_id, nome, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (loc_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO locacao_itens (empresa_id, locacao_id, nome, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, loc_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
     
-    db.execute("UPDATE orcamentos SET status='aprovado' WHERE id=?", (id,))
+    db.execute("UPDATE orcamentos SET status='aprovado' WHERE id=? AND empresa_id=?", (id, eid))
     
     db.commit()
     db.close()
@@ -2017,15 +2028,15 @@ def serve_react(path):
         from flask import jsonify
         return jsonify({'erro': 'Endpoint não encontrado'}), 404
     
-    # Block SPA from returning HTML to missing JS/CSS asset requests
-    if path.startswith('assets/'):
-        from flask import make_response
-        return make_response("File not found", 404)
+    # Serve static assets manually
+    if path and os.path.exists(os.path.join(app.static_folder, path)):
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, path)
         
     index_path = os.path.join(TEMPLATE_DIR, 'index.html')
     if os.path.exists(index_path):
-        with open(index_path, 'r', encoding='utf-8') as f:
-            return f.read()
+        from flask import send_file
+        return send_file(index_path)
     return "Aguarde, gerando Frontend...", 404
 
 
