@@ -18,7 +18,7 @@ Backend em Flask · Frontend em React + Vite · Banco de Dados PostgreSQL (Neon.
 
 ## Visão Geral
 
-O **Dycore** é um ecossistema SaaS desenvolvido para modernizar o fluxo de trabalho de empresas que lidam com produtos personalizados e locações. Com uma interface **compacta e intuitiva**, ele elimina o ruído visual e foca no que importa: a agilidade operacional.
+O **Dycore** é um ecossistema SaaS desenvolvido para modernizar o fluxo de trabalho de empresas que lidam com vendas, locações, produção de produtos personalizados e impressões. Com uma interface **compacta e intuitiva**, ele elimina o ruído visual e foca no que importa: a agilidade operacional.
 
 ### Interface Moderna
 
@@ -26,7 +26,6 @@ O **Dycore** é um ecossistema SaaS desenvolvido para modernizar o fluxo de trab
 
 ![1776399320037](image/README/1776399320037.png)
 
-*Design premium split-screen com gradientes mesh suaves e glassmorphism.*
 
 #### Dashboard Integrado
 
