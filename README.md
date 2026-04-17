@@ -107,6 +107,6 @@ Projeto_Sistema_Gestao/
 
 <div align="center">
 
-Desenvolvido para máxima performance e elegância pela equipe Dycore SaaS. 💜
+Idealizado e desenvolvido com muito carinho para a empresa Drip Art para máxima performance e elegância 💜
 
 </div>
