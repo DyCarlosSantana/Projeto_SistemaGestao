@@ -245,8 +245,24 @@ CREATE TABLE IF NOT EXISTS usuarios (
     email TEXT UNIQUE NOT NULL,
     senha_hash TEXT NOT NULL,
     role TEXT DEFAULT 'operador',
+    cargo_id INTEGER REFERENCES cargos(id),
     ativo INTEGER DEFAULT 1,
     ultimo_login TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cargos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER DEFAULT 1,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ativo INTEGER DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cargo_permissoes (
+    cargo_id INTEGER NOT NULL REFERENCES cargos(id) ON DELETE CASCADE,
+    permissao TEXT NOT NULL,
+    PRIMARY KEY(cargo_id, permissao)
 );
 
 CREATE TABLE IF NOT EXISTS itens_locacao (

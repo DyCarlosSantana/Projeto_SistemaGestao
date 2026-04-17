@@ -48,7 +48,7 @@ export default function FiadoPage() {
   const metrics = dashQ.data;
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Fiado</h1>

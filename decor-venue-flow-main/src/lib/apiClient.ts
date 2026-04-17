@@ -43,9 +43,14 @@ export async function fetchWithAuth(
   const token = getToken();
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  // Nao forcamos Content-Type para FormData (upload de arquivos);
+  // o browser define automaticamente com o boundary correto.
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

@@ -36,13 +36,13 @@ async function request<T>(
   }
   const token = sessionStorage.getItem('dycore_token');
   const headers: Record<string, string> = {};
-  if (opts?.body) headers["Content-Type"] = "application/json";
+  if (opts?.body && !(opts.body instanceof FormData)) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(url.toString(), {
     method: opts?.method || (opts?.body ? "POST" : "GET"),
     headers: Object.keys(headers).length > 0 ? headers : undefined,
-    body: opts?.body ? JSON.stringify(opts.body) : undefined,
+    body: opts?.body instanceof FormData ? opts.body : (opts?.body ? JSON.stringify(opts.body) : undefined),
   });
 
   if (res.status === 401) {
@@ -184,6 +184,18 @@ export const api = {
   configuracoes: () => request<any>("/configuracoes"),
   salvarConfiguracoes: (payload: any) => request<any>("/configuracoes", { method: "POST", body: payload }),
 
+  // Modulos & Logo
+  toggleModulo: (modulo: string, ativo: boolean) => request<any>("/configuracoes/modulos/toggle", { method: "POST", body: { modulo, ativo } }),
+  uploadLogo: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<any>("/upload/logo", { method: "POST", body: formData });
+  },
+
+  cargos: () => request<any[]>("/cargos"),
+  salvarCargo: (payload: any, id?: number) => request<any>(id ? `/cargos/${id}` : "/cargos", { method: id ? "PUT" : "POST", body: payload }),
+  excluirCargo: (id: number) => request<void>(`/cargos/${id}`, { method: "DELETE" }),
+
   usuarios: () => request<any[]>("/usuarios"),
   salvarUsuario: (payload: any, id?: number) => request<any>(id ? `/usuarios/${id}` : "/usuarios", { method: id ? "PUT" : "POST", body: payload }),
   excluirUsuario: (id: number) => request<void>(`/usuarios/${id}`, { method: "DELETE" }),
@@ -252,7 +264,14 @@ export const api = {
     request<any>(id ? `/kits/${id}` : "/kits", { method: id ? "PUT" : "POST", body: payload }),
   excluirKit: (id: number) => request<void>(`/kits/${id}`, { method: "DELETE" }),
 
+  // Configurações avançadas e RBAC
+  modulos: () => request<any[]>("/configuracoes/modulos"),
+
+  backups: () => request<any[]>("/backup/lista"),
+  fazerBackupManual: () => request<any>("/backup/manual", { method: "POST" }),
+
   // Fluxo de caixa
   fluxoCaixa: (q: { data_ini: string; data_fim: string }) => request<any>("/fluxo-caixa", { query: q }),
 };
+
 

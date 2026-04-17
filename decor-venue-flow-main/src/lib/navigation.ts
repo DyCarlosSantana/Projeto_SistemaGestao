@@ -13,71 +13,92 @@ import {
   CreditCard,
   Calendar,
   ClipboardList,
-  Wrench,
   Settings,
   type LucideIcon,
 } from "lucide-react";
 
-export interface NavItem {
+export interface NavChild {
   title: string;
   path: string;
+  /** Chave do módulo correspondente. Null = sempre visível. */
+  modulo: string | null;
+  /** Se definido, apenas esse cargo mínimo vê */
+  minRole?: "admin" | "gerente";
+}
+
+export interface NavGroup {
+  /** Rótulo do grupo (tooltip quando hover) */
+  label: string;
   icon: LucideIcon;
+  /** Se definido, clicar no ícone navega direto (sem flyout) */
+  path?: string;
+  /** Sub-itens que aparecem no flyout */
+  children?: NavChild[];
+  modulo?: string | null;
+  minRole?: "admin" | "gerente";
 }
 
-export interface NavSection {
-  label?: string;
-  items: NavItem[];
-}
-
-export const navigation: NavSection[] = [
+export const navigation: NavGroup[] = [
   {
-    items: [
-      { title: "Dashboard", path: "/", icon: LayoutDashboard },
-    ],
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    path: "/",
+    modulo: "dashboard",
   },
   {
     label: "Vendas",
-    items: [
-      { title: "Caixa / PDV", path: "/pdv", icon: ShoppingCart },
-      { title: "Orçamentos", path: "/orcamentos", icon: FileText },
-      { title: "Calculadora", path: "/calculadora", icon: Calculator },
+    icon: ShoppingCart,
+    children: [
+      { title: "Caixa / PDV", path: "/pdv", modulo: "pdv" },
+      { title: "Orçamentos", path: "/orcamentos", modulo: "orcamentos" },
+      { title: "Calculadora", path: "/calculadora", modulo: "calculadora" },
     ],
   },
   {
     label: "Locação",
-    items: [
-      { title: "Locações", path: "/locacoes", icon: Package },
-      { title: "Itens p/ Locação", path: "/itens-locacao", icon: PartyPopper },
+    icon: Package,
+    children: [
+      { title: "Locações", path: "/locacoes", modulo: "locacoes" },
+      { title: "Itens p/ Locação", path: "/itens-locacao", modulo: "itens_locacao" },
     ],
   },
   {
     label: "Cadastros",
-    items: [
-      { title: "Clientes", path: "/clientes", icon: Users },
-      { title: "Produtos", path: "/produtos", icon: Box },
+    icon: Users,
+    children: [
+      { title: "Clientes", path: "/clientes", modulo: "clientes" },
+      { title: "Produtos", path: "/produtos", modulo: "produtos" },
     ],
   },
   {
     label: "Financeiro",
-    items: [
-      { title: "Despesas", path: "/despesas", icon: Receipt },
-      { title: "Fluxo de Caixa", path: "/fluxo", icon: TrendingUp },
-      { title: "Fiado", path: "/fiado", icon: CreditCard },
+    icon: Receipt,
+    children: [
+      { title: "Despesas", path: "/despesas", modulo: "despesas", minRole: "gerente" },
+      { title: "Fluxo de Caixa", path: "/fluxo", modulo: "fluxo_caixa", minRole: "gerente" },
+      { title: "Fiado", path: "/fiado", modulo: "fiado" },
     ],
   },
   {
-    label: "Operação",
-    items: [
-      { title: "Agenda", path: "/agenda", icon: Calendar },
-      { title: "Encomendas", path: "/encomendas", icon: ClipboardList },
-      { title: "Serviços", path: "/servicos", icon: Wrench },
-      { title: "Relatórios", path: "/relatorios", icon: BarChart3 },
+    label: "Agenda",
+    icon: Calendar,
+    children: [
+      { title: "Agenda", path: "/agenda", modulo: "agenda" },
+      { title: "Encomendas", path: "/encomendas", modulo: "encomendas" },
     ],
   },
   {
-    label: "",
-    items: [
-      { title: "Configurações", path: "/configuracoes", icon: Settings },
-    ],
+    label: "Relatórios",
+    icon: BarChart3,
+    path: "/relatorios",
+    modulo: "relatorios",
+    minRole: "gerente",
+  },
+  {
+    label: "Configurações",
+    icon: Settings,
+    path: "/configuracoes",
+    modulo: "configuracoes",
+    minRole: "admin",
   },
 ];

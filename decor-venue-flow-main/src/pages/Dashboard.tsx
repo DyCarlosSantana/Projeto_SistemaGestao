@@ -107,7 +107,7 @@ export default function Dashboard() {
   }, [d]);
 
   return (
-    <div className="space-y-6 max-w-[1200px]">
+    <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">
@@ -127,6 +127,31 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Quick Actions */}
+      <motion.div custom={0} initial="hidden" animate="visible" variants={fadeIn}>
+        <div className="flex flex-wrap gap-3">
+          {[
+            { label: "Nova Venda", path: "/pdv", gradient: "bg-gradient-brand" },
+            { label: "Novo Orçamento", path: "/orcamentos", gradient: "bg-gradient-cool" },
+            { label: "Nova Locação", path: "/locacoes", gradient: "bg-gradient-warm" },
+            { label: "Registrar Despesa", path: "/despesas", gradient: "bg-secondary" },
+          ].map((a) => (
+            <button
+              key={a.label}
+              onClick={() => (window.location.href = a.path)}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all hover:opacity-85 hover:shadow-md ${
+                a.gradient === "bg-secondary"
+                  ? "bg-secondary text-foreground"
+                  : `${a.gradient} text-white`
+              }`}
+            >
+              <span className="text-sm">+</span>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[

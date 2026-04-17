@@ -24,14 +24,29 @@ import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound.tsx";
 import Login from "@/pages/Login";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ModulosProvider } from "@/contexts/ModulosContext";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children, requireAdmin }: { children: React.ReactNode, requireAdmin?: boolean }) => {
+import { AccessDenied } from "@/components/AccessDenied";
+
+const ProtectedRoute = ({ children, requireRole, requirePermission }: { children: React.ReactNode, requireRole?: 'admin' | 'gerente', requirePermission?: string }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (requireAdmin && user.role !== "admin") return <Navigate to="/" replace />;
+  
+  const hasRole = !requireRole || 
+                  (requireRole === 'admin' && user.role === 'admin') || 
+                  (requireRole === 'gerente' && ['admin', 'gerente'].includes(user.role));
+                  
+  const userPerms = user.permissoes || [];
+  const isMaster = user.role === 'admin' || userPerms.includes('*');
+  const hasPerm = !requirePermission || isMaster || userPerms.includes(requirePermission);
+
+  if (!hasRole || !hasPerm) {
+    return <AccessDenied />;
+  }
+
   return <>{children}</>;
 };
 
@@ -44,22 +59,22 @@ const AppRoutes = () => {
         <ProtectedRoute>
           <AppLayout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/pdv" element={<PDVPage />} />
-              <Route path="/locacoes" element={<LocacoesPage />} />
-              <Route path="/orcamentos" element={<OrcamentosPage />} />
-              <Route path="/relatorios" element={<RelatoriosPage />} />
-              <Route path="/clientes" element={<ClientesPage />} />
-              <Route path="/produtos" element={<ProdutosPage />} />
-              <Route path="/itens-locacao" element={<ItensLocacaoPage />} />
-              <Route path="/calculadora" element={<CalculadoraPage />} />
-              <Route path="/despesas" element={<DespesasPage />} />
-              <Route path="/fluxo" element={<FluxoDeCaixaPage />} />
-              <Route path="/fiado" element={<FiadoPage />} />
+              <Route path="/" element={<ProtectedRoute requirePermission="dashboard_view"><Dashboard /></ProtectedRoute>} />
+              <Route path="/pdv" element={<ProtectedRoute requirePermission="vendas_view"><PDVPage /></ProtectedRoute>} />
+              <Route path="/locacoes" element={<ProtectedRoute requirePermission="locacoes_view"><LocacoesPage /></ProtectedRoute>} />
+              <Route path="/orcamentos" element={<ProtectedRoute requirePermission="vendas_view"><OrcamentosPage /></ProtectedRoute>} />
+              <Route path="/relatorios" element={<ProtectedRoute requireRole="gerente"><RelatoriosPage /></ProtectedRoute>} />
+              <Route path="/clientes" element={<ProtectedRoute requirePermission="clientes_view"><ClientesPage /></ProtectedRoute>} />
+              <Route path="/produtos" element={<ProtectedRoute requirePermission="vendas_view"><ProdutosPage /></ProtectedRoute>} />
+              <Route path="/itens-locacao" element={<ProtectedRoute requirePermission="locacoes_view"><ItensLocacaoPage /></ProtectedRoute>} />
+              <Route path="/calculadora" element={<ProtectedRoute requirePermission="vendas_view"><CalculadoraPage /></ProtectedRoute>} />
+              <Route path="/despesas" element={<ProtectedRoute requirePermission="despesas_view"><DespesasPage /></ProtectedRoute>} />
+              <Route path="/fluxo" element={<ProtectedRoute requirePermission="despesas_view"><FluxoDeCaixaPage /></ProtectedRoute>} />
+              <Route path="/fiado" element={<ProtectedRoute requirePermission="vendas_view"><FiadoPage /></ProtectedRoute>} />
               <Route path="/agenda" element={<AgendaPage />} />
-              <Route path="/encomendas" element={<EncomendasPage />} />
-              <Route path="/servicos" element={<ServicosPage />} />
-              <Route path="/configuracoes" element={<ProtectedRoute requireAdmin><ConfiguracoesPage /></ProtectedRoute>} />
+              <Route path="/encomendas" element={<ProtectedRoute requirePermission="encomendas_view"><EncomendasPage /></ProtectedRoute>} />
+              <Route path="/servicos" element={<ProtectedRoute requirePermission="vendas_view"><ServicosPage /></ProtectedRoute>} />
+              <Route path="/configuracoes" element={<ProtectedRoute requireRole="admin"><ConfiguracoesPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>
@@ -76,7 +91,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <ModulosProvider>
+            <AppRoutes />
+          </ModulosProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

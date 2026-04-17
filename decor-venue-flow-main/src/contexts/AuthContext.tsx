@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { setToken, clearToken, setUnauthorizedCallback } from '@/lib/apiClient';
 
-type UserRole = 'admin' | 'operador';
+type UserRole = 'admin' | 'operador' | 'gerente';
 
 export interface User {
   id: number;
   nome: string;
   email: string;
   role: UserRole;
+  cargo_id?: number;
+  permissoes?: string[];
 }
 
 interface AuthContextType {

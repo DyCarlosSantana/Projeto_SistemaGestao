@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useCalcStore } from "@/store/calcStore";
 import { Info } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE_URL, type OrcamentoRow } from "@/lib/api";
@@ -55,7 +56,8 @@ export default function OrcamentosPage() {
   // Modal (Novo / Editar orçamento)
   const [modalOpen, setModalOpen] = useState(false);
   const [payModal, setPayModal] = useState<{open: boolean; id: number | null}>({open: false, id: null});
-  const [payForma, setPayForma] = useState('pix');
+  const [payForma, setPayForma] = useState("dinheiro");
+  const [confirmModal, setConfirmModal] = useState<{open: boolean, type: 'excluir' | 'locacao' | null, id: number | null}>({open: false, type: null, id: null});
   const [editId, setEditId] = useState<number | null>(null);
 
   const [clienteNome, setClienteNome] = useState("");
@@ -70,6 +72,8 @@ export default function OrcamentosPage() {
 
   const produtosQ = useQuery({ queryKey: ["produtos"], queryFn: api.produtos });
   const servicosQ = useQuery({ queryKey: ["servicos"], queryFn: () => api.servicos() });
+  const itensLocQ = useQuery({ queryKey: ["itens-locacao"], queryFn: api.itensLocacao });
+  const kitsQ = useQuery({ queryKey: ["kits"], queryFn: api.kits });
 
   const orcQ = useQuery({
     queryKey: ["orcamentos"],
@@ -107,6 +111,21 @@ export default function OrcamentosPage() {
     },
     onError: () => toast.error("Erro ao converter orçamento"),
   });
+
+  const { itemsToAdd, clearCart } = useCalcStore();
+
+  useEffect(() => {
+    if (itemsToAdd.length > 0) {
+      setItems((prev) => [...prev, ...itemsToAdd.map(i => ({
+        descricao: i.descricao,
+        quantidade: i.quantidade,
+        preco_unitario: i.preco_unitario,
+        subtotal: i.subtotal,
+      }))]);
+      setModalOpen(true);
+      clearCart();
+    }
+  }, [itemsToAdd, clearCart]);
 
   const calcTotals = useMemo(() => {
     const subtotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
@@ -218,7 +237,7 @@ export default function OrcamentosPage() {
   }, [orcQ.data, q, st]);
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Orçamentos</h1>
@@ -307,7 +326,7 @@ export default function OrcamentosPage() {
                 <TableCell>{statusBadge(o.status)}</TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex flex-wrap justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/orcamentos/${o.id}/pdf`, "_blank")}>
+                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/orcamentos/${o.id}/pdf?token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank")}>
                       PDF
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => abrirEditar(o)}>
@@ -336,11 +355,7 @@ export default function OrcamentosPage() {
                       <Button
                         size="sm"
                         className="bg-primary text-primary-foreground hover:opacity-90"
-                        onClick={() => {
-                          if (confirm("Gerar uma nova Locação a partir deste orçamento?")) {
-                            converterLocacaoM.mutate(o.id);
-                          }
-                        }}
+                        onClick={() => setConfirmModal({ open: true, type: 'locacao', id: o.id })}
                         disabled={converterLocacaoM.isPending}
                       >
                         Gerar locação
@@ -349,9 +364,7 @@ export default function OrcamentosPage() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => {
-                        if (confirm("Excluir este orçamento?")) excluirM.mutate(o.id);
-                      }}
+                      onClick={() => setConfirmModal({ open: true, type: 'excluir', id: o.id })}
                       disabled={excluirM.isPending}
                     >
                       Excluir
@@ -380,9 +393,11 @@ export default function OrcamentosPage() {
               <div className="text-sm font-semibold">Itens do orçamento</div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="sm:col-span-3">
-                  <div className="mb-2 flex gap-4 text-xs font-medium text-muted-foreground">
+                  <div className="mb-2 flex flex-wrap gap-4 text-xs font-medium text-muted-foreground">
                     <label className="flex items-center gap-1 cursor-pointer"><input type="radio" value="produto" checked={tipo === "produto"} onChange={() => { setTipo("produto"); setItDesc(""); setItPreco(0); }} /> Produto</label>
                     <label className="flex items-center gap-1 cursor-pointer"><input type="radio" value="servico" checked={tipo === "servico"} onChange={() => { setTipo("servico"); setItDesc(""); setItPreco(0); }} /> Serviço</label>
+                    <label className="flex items-center gap-1 cursor-pointer"><input type="radio" value="locacao_item" checked={tipo === "locacao_item"} onChange={() => { setTipo("locacao_item"); setItDesc(""); setItPreco(0); }} /> Item (Aluguel)</label>
+                    <label className="flex items-center gap-1 cursor-pointer"><input type="radio" value="locacao_kit" checked={tipo === "locacao_kit"} onChange={() => { setTipo("locacao_kit"); setItDesc(""); setItPreco(0); }} /> Kit (Aluguel)</label>
                     <label className="flex items-center gap-1 cursor-pointer"><input type="radio" value="diverso" checked={tipo === "diverso"} onChange={() => { setTipo("diverso"); setItDesc(""); setItPreco(0); }} /> Diverso</label>
                   </div>
                 </div>
@@ -410,12 +425,44 @@ export default function OrcamentosPage() {
                       <Select value={itDesc} onValueChange={(v) => {
                         setItDesc(v);
                         const s = (servicosQ.data || []).find((x: any) => x.nome === v);
-                        if (s) { setItPreco(Number(s.preco_base || 0)); }
+                        if (s) { setItPreco(Number(s.preco || 0)); }
                       }}>
                         <SelectTrigger><SelectValue placeholder="Selecione o serviço..." /></SelectTrigger>
                         <SelectContent>
                           {(servicosQ.data || []).map((s: any) => (
                             <SelectItem key={s.id} value={s.nome}>{s.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : tipo === "locacao_item" ? (
+                    <>
+                      <label className="text-xs font-medium text-muted-foreground">Item de Locação *</label>
+                      <Select value={itDesc} onValueChange={(v) => {
+                        setItDesc(v);
+                        const i = (itensLocQ.data || []).find((x: any) => x.nome === v);
+                        if (i) { setItPreco(Number(i.preco_diaria || 0)); }
+                      }}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o item..." /></SelectTrigger>
+                        <SelectContent>
+                          {(itensLocQ.data || []).map((i: any) => (
+                            <SelectItem key={i.id} value={i.nome}>{i.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  ) : tipo === "locacao_kit" ? (
+                    <>
+                      <label className="text-xs font-medium text-muted-foreground">Kit de Locação *</label>
+                      <Select value={itDesc} onValueChange={(v) => {
+                        setItDesc(v);
+                        const k = (kitsQ.data || []).find((x: any) => x.nome === v);
+                        if (k) { setItPreco(Number(k.preco_total || 0)); }
+                      }}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o kit..." /></SelectTrigger>
+                        <SelectContent>
+                          {(kitsQ.data || []).map((k: any) => (
+                            <SelectItem key={k.id} value={k.nome}>{k.nome}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -429,7 +476,7 @@ export default function OrcamentosPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Qtd</label>
-                  <Input type="number" value={itQtd} step={0.01} min={0} onChange={(e) => setItQtd(Number(e.target.value))} />
+                  <Input type="number" value={itQtd} step={1} min={1} onChange={(e) => setItQtd(Number(e.target.value))} />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Valor unit.</label>
@@ -525,7 +572,37 @@ export default function OrcamentosPage() {
             <Button onClick={() => {
               if (payModal.id) converterM.mutate({ id: payModal.id, forma_pagamento: payForma });
               setPayModal({ open: false, id: null });
-            }}>Confirmar</Button>
+            }}>Confirmar Pagamento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmModal.open} onOpenChange={(v) => { if (!v) setConfirmModal({ open: false, type: null, id: null }) }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmModal.type === 'locacao' ? 'Gerar Locação' : 'Excluir Orçamento'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmModal.type === 'locacao' ? 'Deseja gerar uma nova locação a partir deste orçamento aprovado?' : 'Tem certeza que deseja excluir esse orçamento? Esta ação não pode ser desfeita.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setConfirmModal({ open: false, type: null, id: null })}>
+              Cancelar
+            </Button>
+            <Button 
+              variant={confirmModal.type === 'excluir' ? 'destructive' : 'default'}
+              onClick={() => {
+                if (confirmModal.id) {
+                   if (confirmModal.type === 'locacao') converterLocacaoM.mutate(confirmModal.id);
+                   else if (confirmModal.type === 'excluir') excluirM.mutate(confirmModal.id);
+                }
+                setConfirmModal({ open: false, type: null, id: null });
+              }}
+            >
+              Confirmar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

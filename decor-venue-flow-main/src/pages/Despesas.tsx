@@ -103,7 +103,7 @@ export default function DespesasPage() {
   const total = useMemo(() => rows.reduce((s, d) => s + (d.valor || 0), 0), [rows]);
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Despesas</h1>

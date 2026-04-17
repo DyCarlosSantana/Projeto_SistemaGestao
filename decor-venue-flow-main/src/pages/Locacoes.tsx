@@ -285,7 +285,7 @@ export default function LocacoesPage() {
   }, [locItems, desconto]);
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Locações</h1>
@@ -294,7 +294,7 @@ export default function LocacoesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => window.open(`${API_BASE_URL}/locacoes/exportar`, "_blank")}>
+          <Button variant="secondary" onClick={() => window.open(`${API_BASE_URL}/locacoes/exportar?token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank")}>
             Exportar CSV
           </Button>
           <Button variant="outline" onClick={abrirNova}>
@@ -392,7 +392,7 @@ export default function LocacoesPage() {
                         Devolver
                       </Button>
                     ) : null}
-                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/locacoes/${l.id}/pdf`, "_blank")}>
+                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/locacoes/${l.id}/pdf?token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank")}>
                       PDF
                     </Button>
                     <Button
@@ -512,7 +512,7 @@ export default function LocacoesPage() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Quantidade</label>
-                  <Input type="number" min={1} value={selQtd} step={1} onChange={(e) => setSelQtd(Number(e.target.value))} />
+                  <Input type="number" min={1} step={1} value={selQtd} onChange={(e) => setSelQtd(Math.max(1, Math.trunc(Number(e.target.value))))} />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Preço unit.</label>
@@ -557,7 +557,7 @@ export default function LocacoesPage() {
             )}
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={adicionarItemModal}>
+              <Button type="button" size="sm" variant="secondary" onClick={adicionarItemModal}>
                 + Adicionar
               </Button>
             </div>
@@ -573,7 +573,7 @@ export default function LocacoesPage() {
                       </div>
                     </div>
                     <div className="text-sm font-semibold text-foreground">{brl(it.subtotal)}</div>
-                    <Button size="sm" variant="destructive" onClick={() => removerLocItem(idx)}>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => removerLocItem(idx)}>
                       Remover
                     </Button>
                   </div>

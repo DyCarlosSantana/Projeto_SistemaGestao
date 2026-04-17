@@ -205,7 +205,7 @@ export default function ItensLocacaoPage() {
   });
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Itens / Kits de locação</h1>
@@ -366,7 +366,7 @@ export default function ItensLocacaoPage() {
             </div>
             <div className="sm:col-span-1">
               <label className="text-xs font-medium text-muted-foreground">Quantidade total</label>
-              <Input type="number" step={1} value={ilQtdTotal} onChange={(e) => setIlQtdTotal(Number(e.target.value))} />
+              <Input type="number" step={1} min={1} value={ilQtdTotal} onChange={(e) => setIlQtdTotal(Math.trunc(Number(e.target.value)))} />
             </div>
           </div>
 
@@ -424,7 +424,7 @@ export default function ItensLocacaoPage() {
                 </div>
                 <div className="w-[140px]">
                   <label className="text-xs font-medium text-muted-foreground">Qtd</label>
-                  <Input type="number" step={1} min={1} value={kitSelQtd} onChange={(e) => setKitSelQtd(Number(e.target.value))} />
+                  <Input type="number" step={1} min={1} value={kitSelQtd} onChange={(e) => setKitSelQtd(Math.trunc(Number(e.target.value)))} />
                 </div>
                 <Button type="button" size="sm" variant="secondary" onClick={adicionarItemAoKit}>
                   + Adicionar

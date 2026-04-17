@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useCalcStore } from "@/store/calcStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { brl } from "@/lib/format";
@@ -58,6 +60,9 @@ export default function CalculadoraPage() {
 
   const materiaisQ = useQuery({ queryKey: ["materiais"], queryFn: api.materiais });
   const acabamentosQ = useQuery({ queryKey: ["acabamentos"], queryFn: api.acabamentos });
+
+  const nav = useNavigate();
+  const addToCart = useCalcStore((s) => s.addToCart);
 
   // --- State: calculadora ---
   const [materialId, setMaterialId] = useState<number | "">("");
@@ -203,7 +208,7 @@ export default function CalculadoraPage() {
   });
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Calculadora</h1>
@@ -350,12 +355,36 @@ export default function CalculadoraPage() {
           <div className="flex flex-col gap-2">
             <Button
               variant="default"
-              onClick={() => toast("Integração com PDV/Orçamento ainda não implementada no React.")}
+              onClick={() => {
+                if (!calc) return;
+                addToCart({
+                  descricao: calc.descricao || "Impressão Calculada",
+                  quantidade: quantidade,
+                  preco_unitario: calc.total! / quantidade,
+                  subtotal: calc.total!,
+                  tipo: "diverso",
+                });
+                nav("/pdv");
+              }}
               disabled={!calc}
             >
               Adicionar à venda
             </Button>
-            <Button variant="secondary" onClick={() => toast("Integração com PDV/Orçamento ainda não implementada no React.")} disabled={!calc}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!calc) return;
+                addToCart({
+                  descricao: calc.descricao || "Impressão Calculada",
+                  quantidade: quantidade,
+                  preco_unitario: calc.total! / quantidade,
+                  subtotal: calc.total!,
+                  tipo: "diverso",
+                });
+                nav("/orcamentos");
+              }}
+              disabled={!calc}
+            >
               Adicionar ao orçamento
             </Button>
           </div>

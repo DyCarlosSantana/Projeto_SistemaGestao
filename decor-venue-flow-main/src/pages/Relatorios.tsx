@@ -18,12 +18,12 @@ export default function RelatoriosPage() {
     
     // O backend irá gerar um arquivo PDF para baixar automaticamente
     const url = `${API_BASE_URL}/relatorios/exportar?data_ini=${dataIni}&data_fim=${dataFim}`;
-    window.open(url, "_blank");
+    window.open(`${url}&token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank");
     toast.success("Download do relatório iniciado!");
   };
 
   return (
-    <div className="max-w-[800px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-2xl font-bold text-foreground">Relatórios Gerenciais</h1>
         <p className="text-sm text-muted-foreground">

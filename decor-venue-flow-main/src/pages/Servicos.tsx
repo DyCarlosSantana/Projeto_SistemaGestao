@@ -107,7 +107,7 @@ export default function ServicosPage() {
   const rows = servicosQ.data || [];
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Catálogo de Serviços</h1>

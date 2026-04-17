@@ -1,280 +1,484 @@
-import { useEffect, useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { toast } from "@/components/ui/sonner";
+import { toast as showToast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, UserPlus, Trash, Edit } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ConfiguracoesPage() {
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState("perfil");
 
-  // --- Perfil da Empresa ---
-  const [formConfig, setFormConfig] = useState<any>({
-    empresa_nome: "",
-    empresa_cnpj: "",
-    empresa_telefone: "",
-    empresa_whatsapp: "",
-    empresa_email: "",
-    empresa_instagram: "",
-    empresa_endereco: "",
-    empresa_site: "",
-    logo_path: "",
+  // --- Queries ---
+  const configQ = useQuery({ queryKey: ["configuracoes"], queryFn: api.configuracoes });
+  const usuariosQ = useQuery({ queryKey: ["usuarios"], queryFn: api.usuarios });
+  const cargosQ = useQuery({ queryKey: ["cargos"], queryFn: api.cargos });
+  const modulosQ = useQuery({ queryKey: ["modulos"], queryFn: api.modulos });
+
+  // --- Mutations ---
+  const saveConfigM = useMutation({
+    mutationFn: (data: any) => api.salvarConfiguracoes(data),
+    onSuccess: () => {
+      showToast.success("Configurações salvas!");
+      qc.invalidateQueries({ queryKey: ["configuracoes"] });
+    },
+    onError: () => showToast.error("Erro ao salvar configurações"),
   });
 
-  const configQ = useQuery({ queryKey: ["configuracoes"], queryFn: () => api.configuracoes() });
+  const toggleModuloM = useMutation({
+    mutationFn: ({ modulo, ativo }: { modulo: string; ativo: boolean }) =>
+      api.toggleModulo(modulo, ativo),
+    onSuccess: () => {
+      showToast.success("Módulo atualizado!");
+      qc.invalidateQueries({ queryKey: ["modulos"] });
+      // Invalida 'me/modulos' se existir para atualizar sidebar
+      qc.invalidateQueries({ queryKey: ["me", "modulos"] });
+    },
+  });
+
+  const backupM = useMutation({
+    mutationFn: () => api.fazerBackupManual(),
+    onSuccess: (res: any) => showToast.success(res.mensagem || "Backup concluído!"),
+    onError: () => showToast.error("Erro ao gerar backup"),
+  });
+
+  // --- Render Sections ---
+
+  return (
+    <div className="space-y-8 pb-10">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Configurações do Sistema</h1>
+        <p className="text-muted-foreground mt-1">Gerencie sua empresa, usuários e preferências globais.</p>
+      </header>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+          <TabsTrigger value="perfil">Perfil</TabsTrigger>
+          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          <TabsTrigger value="modulos">Módulos</TabsTrigger>
+          <TabsTrigger value="avancado">Avançado</TabsTrigger>
+        </TabsList>
+
+        <div className="mt-6">
+          {/* TAP: PERFIL */}
+          <TabsContent value="perfil">
+            <PerfilEmpresaTab config={configQ.data || {}} onSave={(d) => saveConfigM.mutate(d)} isLoading={saveConfigM.isPending} />
+          </TabsContent>
+
+          {/* TAP: USUARIOS & RBAC */}
+          <TabsContent value="usuarios">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <UsuariosList usuarios={usuariosQ.data || []} cargos={cargosQ.data || []} onRefresh={() => usuariosQ.refetch()} />
+              <CargosList cargos={cargosQ.data || []} onRefresh={() => cargosQ.refetch()} />
+            </div>
+          </TabsContent>
+
+          {/* TAP: MODULOS */}
+          <TabsContent value="modulos">
+            <ModulosManager modulos={modulosQ.data || []} onToggle={(m, a) => toggleModuloM.mutate({ modulo: m, ativo: a })} />
+          </TabsContent>
+
+          {/* TAP: AVANCADO (Backup, etc) */}
+          <TabsContent value="avancado">
+            <Card>
+              <CardHeader>
+                <CardTitle>Manutenção e Segurança</CardTitle>
+                <CardDescription>Ferramentas de backup e exportação de dados.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-secondary/20">
+                  <div>
+                    <h4 className="font-semibold">Backup Manual</h4>
+                    <p className="text-sm text-muted-foreground">Gera um snapshot imediato do banco de dados.</p>
+                  </div>
+                  <Button onClick={() => backupM.mutate()} disabled={backupM.isPending}>
+                    {backupM.isPending ? "Processando..." : "Gerar Backup Agora"}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg opacity-50 cursor-not-allowed">
+                  <div>
+                    <h4 className="font-semibold">Exportar para Excel</h4>
+                    <p className="text-sm text-muted-foreground">Baixar todos os registros (Vendas, Locações, Clientes).</p>
+                  </div>
+                  <Badge variant="secondary">Em breve</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </div>
+      </Tabs>
+    </div>
+  );
+}
+
+// --- Sub-Components ---
+
+function PerfilEmpresaTab({ config, onSave, isLoading }: any) {
+  const [local, setLocal] = useState({
+    empresa_nome: config.empresa_nome || "",
+    empresa_email: config.empresa_email || "",
+    empresa_telefone: config.empresa_telefone || "",
+    empresa_cnpj: config.empresa_cnpj || "",
+    empresa_endereco: config.empresa_endereco || "",
+    orcamento_validade_dias: config.orcamento_validade_dias || "7",
+  });
 
   useEffect(() => {
-    if (configQ.data) setFormConfig((prev: any) => ({ ...prev, ...configQ.data }));
-  }, [configQ.data]);
+    setLocal({
+      empresa_nome: config.empresa_nome || "",
+      empresa_email: config.empresa_email || "",
+      empresa_telefone: config.empresa_telefone || "",
+      empresa_cnpj: config.empresa_cnpj || "",
+      empresa_endereco: config.empresa_endereco || "",
+      orcamento_validade_dias: config.orcamento_validade_dias || "7",
+    });
+  }, [config]);
 
-  const salvarConfigM = useMutation({
-    mutationFn: () => api.salvarConfiguracoes(formConfig),
-    onSuccess: async () => {
-      toast.success("Configurações salvas com sucesso!");
-      await qc.invalidateQueries({ queryKey: ["configuracoes"] });
-    },
-    onError: () => toast.error("Erro ao salvar configurações"),
-  });
-
-  const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFormConfig((prev: any) => ({ ...prev, [name]: value }));
+    setLocal((prev) => ({ ...prev, [name]: value }));
   };
 
-  // --- Usuários e Segurança ---
-  const usersQ = useQuery({ queryKey: ["usuarios"], queryFn: () => api.usuarios() });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Informações da Empresa</CardTitle>
+        <CardDescription>Estes dados serão usados em orçamentos, contratos e notas.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2 sm:col-span-2">
+          <label className="text-sm font-medium">Logomarca (Exportação/PDFs)</label>
+          <div className="flex items-center gap-4">
+            {config.empresa_logo ? (
+              <img src={`http://localhost:5000${config.empresa_logo}`} alt="Logo" className="h-16 w-16 object-contain border rounded p-1 bg-white" />
+            ) : null}
+            <Input type="file" accept="image/*" onChange={async (e) => {
+              if (e.target.files && e.target.files[0]) {
+                const toastId = showToast.loading("Enviando logo...");
+                api.uploadLogo(e.target.files[0]).then(() => {
+                  showToast.success("Logo atualizada!", { id: toastId });
+                  window.location.reload();
+                }).catch(() => showToast.error("Erro ao enviar logo", { id: toastId }));
+              }
+            }} />
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">Nome Fantasia</label>
+          <Input name="empresa_nome" value={local.empresa_nome} onChange={handleChange} />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">CNPJ / CPF</label>
+          <Input name="empresa_cnpj" value={local.empresa_cnpj} onChange={handleChange} />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">Email de Contato</label>
+          <Input name="empresa_email" value={local.empresa_email} onChange={handleChange} />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">Telefone / WhatsApp</label>
+          <Input name="empresa_telefone" value={local.empresa_telefone} onChange={handleChange} />
+        </div>
+        <div className="grid gap-2 sm:col-span-2">
+          <label className="text-sm font-medium">Endereço Completo</label>
+          <Input name="empresa_endereco" value={local.empresa_endereco} onChange={handleChange} />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-sm font-medium">Validade Padrão Orçamentos (dias)</label>
+          <Input type="number" name="orcamento_validade_dias" value={local.orcamento_validade_dias} onChange={handleChange} />
+        </div>
+      </CardContent>
+      <CardFooter className="border-t px-6 py-4 flex justify-end">
+        <Button onClick={() => onSave(local)} disabled={isLoading}>
+          {isLoading ? "Salvando..." : "Salvar Alterações"}
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
 
-  const [modalUserOpen, setModalUserOpen] = useState(false);
-  const [editUserId, setEditUserId] = useState<number | null>(null);
-  const [formUser, setFormUser] = useState({ nome: "", email: "", role: "operador", senha: "" });
+function UsuariosList({ usuarios, cargos, onRefresh }: any) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<any>({ nome: '', email: '', role: 'operador', senha: '', cargo_id: '' });
+  const qc = useQueryClient();
 
-  const abrirNovoUsuario = () => {
-    setEditUserId(null);
-    setFormUser({ nome: "", email: "", role: "operador", senha: "" });
-    setModalUserOpen(true);
-  };
-
-  const abrirEditarUsuario = (u: any) => {
-    setEditUserId(u.id);
-    setFormUser({ nome: u.nome, email: u.email, role: u.role, senha: "" });
-    setModalUserOpen(true);
-  };
-
-  const salvarUserM = useMutation({
-    mutationFn: async () => {
-      if (!formUser.nome || !formUser.email) throw new Error("Preencha nome e e-mail");
-      if (!editUserId && !formUser.senha) throw new Error("A senha é obrigatória para novos usuários");
-      return api.salvarUsuario(formUser, editUserId ?? undefined);
-    },
-    onSuccess: async () => {
-      toast.success(editUserId ? "Usuário salvo!" : "Novo usuário criado!");
-      setModalUserOpen(false);
-      await qc.invalidateQueries({ queryKey: ["usuarios"] });
-    },
-    onError: (e: any) => toast.error(e?.message || "Erro ao salvar usuário"),
+  const saveM = useMutation({
+    mutationFn: (data: any) => api.salvarUsuario(data),
+    onSuccess: () => {
+      showToast.success("Usuário criado!");
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ["usuarios"] });
+    }
   });
 
-  const excluirUserM = useMutation({
+  const deleteM = useMutation({
     mutationFn: (id: number) => api.excluirUsuario(id),
-    onSuccess: async () => {
-      toast.success("Usuário excluído ou desativado!");
-      await qc.invalidateQueries({ queryKey: ["usuarios"] });
+    onSuccess: () => {
+      showToast.success("Usuário removido.");
+      qc.invalidateQueries({ queryKey: ["usuarios"] });
     },
-    onError: (e: any) => toast.error(e?.message || "Erro ao excluir usuário"),
+    onError: (e: any) => showToast.error(e.details?.erro || "Erro ao remover usuário")
   });
 
   return (
-    <div className="max-w-[800px] space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">Configurações Gerais</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Gerencie o Perfil da Empresa e Operadores de Sistema.
-        </p>
-      </div>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle>Usuários</CardTitle>
+          <CardDescription>Gerencie quem acessa o sistema.</CardDescription>
+        </div>
+        <Button size="sm" onClick={() => setOpen(true)}>Novo Usuário</Button>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nome</TableHead>
+              <TableHead>Cargo</TableHead>
+              <TableHead className="text-right">Ação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {usuarios.map((u: any) => (
+              <TableRow key={u.id}>
+                <TableCell>
+                  <div className="font-medium">{u.nome}</div>
+                  <div className="text-xs text-muted-foreground">{u.email}</div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="capitalize">
+                    {u.cargo_id && cargos.find((c: any) => c.id === u.cargo_id) 
+                      ? cargos.find((c: any) => c.id === u.cargo_id).nome 
+                      : u.role}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if(confirm("Remover usuario?")) deleteM.mutate(u.id) }}>Excluir</Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
 
-      <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
-          <TabsTrigger value="perfil">Perfil da Empresa</TabsTrigger>
-          <TabsTrigger value="seguranca">Acessos & Operadores</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="perfil" className="mt-6">
-          <div className="rounded-2xl border border-border bg-card shadow-subtle flex flex-col">
-            {configQ.isLoading ? (
-              <div className="p-10 text-center text-muted-foreground">Carregando...</div>
-            ) : (
-              <div className="p-6 grid gap-6 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label className="text-sm font-medium text-foreground mb-1 block">Nome da Empresa</label>
-                  <Input name="empresa_nome" value={formConfig.empresa_nome} onChange={handleConfigChange} placeholder="Ex: DripArt Comunicação Visual" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">CNPJ / CPF</label>
-                  <Input name="empresa_cnpj" value={formConfig.empresa_cnpj} onChange={handleConfigChange} placeholder="Ex: 00.000.000/0001-00" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">E-mail</label>
-                  <Input type="email" name="empresa_email" value={formConfig.empresa_email} onChange={handleConfigChange} placeholder="contato@empresa.com.br" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="text-sm font-medium text-foreground mb-1 block">Endereço Completo</label>
-                  <Input name="empresa_endereco" value={formConfig.empresa_endereco || ""} onChange={handleConfigChange} placeholder="Rua, Número, Bairro, Cidade - UF" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Telefone Principal</label>
-                  <Input name="empresa_telefone" value={formConfig.empresa_telefone || ""} onChange={handleConfigChange} placeholder="(00) 0000-0000" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">WhatsApp</label>
-                  <Input name="empresa_whatsapp" value={formConfig.empresa_whatsapp || ""} onChange={handleConfigChange} placeholder="(00) 90000-0000" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Instagram (sem o @)</label>
-                  <Input name="empresa_instagram" value={formConfig.empresa_instagram || ""} onChange={handleConfigChange} placeholder="Nome de usuário no IG" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Site</label>
-                  <Input name="empresa_site" value={formConfig.empresa_site || ""} onChange={handleConfigChange} placeholder="https://www.seusite.com.br" />
-                </div>
-                <div className="sm:col-span-2 border-t border-border pt-4 mt-2">
-                  <label className="text-sm font-medium text-foreground mb-1 block">URL da Logo (Para PDFs)</label>
-                  <div className="flex items-center gap-4 mt-2">
-                    {formConfig.logo_path ? (
-                      <img src={formConfig.logo_path} alt="Logo Preview" className="h-16 w-16 rounded-md object-contain border border-border bg-white" />
-                    ) : (
-                      <div className="h-16 w-16 rounded-md border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground bg-muted/50">Sem Logo</div>
-                    )}
-                    <Input name="logo_path" value={formConfig.logo_path || ""} onChange={handleConfigChange} placeholder="https://link-para-sua-logo.png" className="flex-1" />
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="border-t border-border bg-muted/20 px-6 py-4 rounded-b-2xl flex justify-end">
-              <Button onClick={() => salvarConfigM.mutate()} disabled={salvarConfigM.isPending || configQ.isLoading}>
-                <Save className="mr-2 h-4 w-4" />
-                {salvarConfigM.isPending ? "Salvando..." : "Salvar Configurações"}
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="seguranca" className="mt-6">
-          <div className="rounded-2xl border border-border bg-card shadow-subtle flex flex-col p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-              <div>
-                <h3 className="font-semibold text-foreground">Usuários Cadastrados</h3>
-                <p className="text-xs text-muted-foreground">Adicione operadores ao sistema.</p>
-              </div>
-              <Button onClick={abrirNovoUsuario} size="sm">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Novo Usuário
-              </Button>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email / Login</TableHead>
-                  <TableHead>Nível de Acesso</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {usersQ.isLoading ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Carregando...</TableCell></TableRow>
-                ) : (
-                  (usersQ.data || []).map((u: any) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium text-foreground">{u.nome}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-1 flex items-center justify-center rounded-full text-xs font-medium w-fit ${u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}>
-                          {u.role === 'admin' ? 'Administrador' : 'Operador'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex gap-2 justify-end">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditarUsuario(u)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => { if(confirm("Excluir este acesso?")) excluirUserM.mutate(u.id); }} disabled={excluirUserM.isPending}>
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <Dialog open={modalUserOpen} onOpenChange={setModalUserOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>{editUserId ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
-            <DialogDescription>
-              {editUserId ? "Altere nome, acesso ou redefina a senha deste usuário." : "Preencha as informações para liberar acesso a um operador."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <label className="text-xs font-medium text-foreground block mb-1">Nome Completo</label>
-              <Input
-                value={formUser.nome}
-                onChange={(e) => setFormUser(prev => ({ ...prev, nome: e.target.value }))}
-                placeholder="Ex: João da Silva"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground block mb-1">E-mail (Login)</label>
-              <Input
-                type="email"
-                value={formUser.email}
-                onChange={(e) => setFormUser(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="joao@dripart.com.br"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground block mb-1">Tipo de Acesso</label>
-              <Select value={formUser.role} onValueChange={(v) => setFormUser(prev => ({ ...prev, role: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="operador">Operador (Restrito)</SelectItem>
-                  <SelectItem value="admin">Administrador (Total)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-foreground block mb-1">
-                {editUserId ? "Nova Senha (deixe em branco para manter a atual)" : "Senha (obrigatória para novo registro)"}
-              </label>
-              <Input
-                type="password"
-                value={formUser.senha}
-                onChange={(e) => setFormUser(prev => ({ ...prev, senha: e.target.value }))}
-                placeholder="••••••"
-              />
-            </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Convidar Usuário</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+             <Input placeholder="Nome completo" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} />
+             <Input placeholder="Email" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+             <div className="grid gap-2">
+               <label className="text-xs font-medium uppercase text-muted-foreground">Nivel do Sistema (Role)</label>
+               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" 
+                       value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
+                 <option value="operador">Operador Base</option>
+                 <option value="admin">Administrador (Total)</option>
+               </select>
+             </div>
+             <div className="grid gap-2">
+               <label className="text-xs font-medium uppercase text-muted-foreground">Cargo Customizado (Permissões granulares)</label>
+               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" 
+                       value={form.cargo_id || ""} onChange={e => setForm({...form, cargo_id: e.target.value ? Number(e.target.value) : ""})}>
+                 <option value="">Nenhum (Usa Nivel do Sistema)</option>
+                 {cargos.map((c: any) => (
+                   <option key={c.id} value={c.id}>{c.nome}</option>
+                 ))}
+               </select>
+             </div>
+             <Input placeholder="Senha (padrão 123456)" type="password" value={form.senha} onChange={e => setForm({...form, senha: e.target.value})} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setModalUserOpen(false)} disabled={salvarUserM.isPending}>
-              Cancelar
-            </Button>
-            <Button onClick={() => salvarUserM.mutate()} disabled={salvarUserM.isPending}>
-              {salvarUserM.isPending ? "Salvando..." : "Salvar"}
-            </Button>
+             <Button onClick={() => saveM.mutate(form)}>Criar Usuário</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Card>
+  );
+}
+
+function CargosList({ cargos, onRefresh }: any) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<any>({ id: null, nome: '', descricao: '', permissoes: [] });
+  const qc = useQueryClient();
+
+  const todasPermissoes = [
+    { id: "dashboard_view", label: "Ver Dashboard" },
+    { id: "vendas_view", label: "Acessar Caixa/PDV" },
+    { id: "vendas_add", label: "Registrar Vendas" },
+    { id: "locacoes_view", label: "Acessar Locações" },
+    { id: "encomendas_view", label: "Acessar Encomendas" },
+    { id: "despesas_view", label: "Acessar Despesas" },
+    { id: "clientes_view", label: "Acessar Clientes" },
+    { id: "config_view", label: "Acessar Configurações" }
+  ];
+
+  const saveM = useMutation({
+    mutationFn: (data: any) => api.salvarCargo(data, data.id || undefined),
+    onSuccess: () => {
+      showToast.success("Cargo salvo!");
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ["cargos"] });
+      onRefresh();
+    }
+  });
+
+  const deleteM = useMutation({
+    mutationFn: (id: number) => api.excluirCargo(id),
+    onSuccess: () => {
+      showToast.success("Cargo removido.");
+      qc.invalidateQueries({ queryKey: ["cargos"] });
+    }
+  });
+
+  const togglePermissao = (p: string) => {
+    setForm((old: any) => {
+      const perms = old.permissoes.includes(p) 
+        ? old.permissoes.filter((x: string) => x !== p)
+        : [...old.permissoes, p];
+      return { ...old, permissoes: perms };
+    });
+  };
+
+  const openForm = (c: any = null) => {
+    if (c) setForm({ id: c.id, nome: c.nome, descricao: c.descricao, permissoes: c.permissoes || [] });
+    else setForm({ id: null, nome: '', descricao: '', permissoes: [] });
+    setOpen(true);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle>Cargos & Hierarquia</CardTitle>
+          <CardDescription>Crie matrizes de acessos personalizados.</CardDescription>
+        </div>
+        <Button size="sm" onClick={() => openForm(null)}>Criar Cargo</Button>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {cargos.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhum cargo customizado.</p>}
+          {cargos.map((c: any) => (
+            <div key={c.id} className="flex flex-col p-3 border rounded-lg gap-2 bg-secondary/5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold uppercase tracking-wider text-sm">{c.nome}</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => openForm(c)}>Editar</Button>
+                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if(confirm("Remover este cargo? Os usuarios dele perderão os acessos.")) deleteM.mutate(c.id); }}>Excluir</Button>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">{c.descricao || "Sem descrição"}</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {(c.permissoes || []).map((p: string) => (
+                   <Badge key={p} variant="secondary" className="text-[10px]">{p}</Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader><DialogTitle>{form.id ? "Editar Cargo" : "Criar Cargo"}</DialogTitle></DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+               <label className="text-sm font-medium">Nome do Cargo</label>
+               <Input placeholder="Ex: Vendedor Sênior" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+               <label className="text-sm font-medium">Descrição (Opcional)</label>
+               <Input placeholder="Sobre as funções..." value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} />
+            </div>
+            
+            <div className="mt-2">
+               <h4 className="font-medium text-sm mb-3">Permissões de Acesso</h4>
+               <div className="grid grid-cols-2 gap-3">
+                 {todasPermissoes.map(p => (
+                   <label key={p.id} className={"flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors " + (form.permissoes.includes(p.id) ? "bg-primary/10 border-primary/50" : "hover:bg-secondary/20")}>
+                     <Switch checked={form.permissoes.includes(p.id)} onCheckedChange={() => togglePermissao(p.id)} />
+                     <span className="text-sm">{p.label}</span>
+                   </label>
+                 ))}
+               </div>
+            </div>
+          </div>
+          <DialogFooter>
+             <Button onClick={() => saveM.mutate(form)} disabled={saveM.isPending}>
+               {saveM.isPending ? "Salvando..." : "Salvar Cargo"}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+function ModulosManager({ modulos, onToggle }: any) {
+  // Lista de módulos base para caso o backend retorne vazio (onboarding)
+  const defaultModulos = [
+    { modulo: "vendas", label: "Vendas & PDV", desc: "Caixa, orçamentos e pedidos." },
+    { modulo: "locacoes", label: "Locações", desc: "Gestão de inventário para aluguel e kits." },
+    { modulo: "encomendas", label: "Encomendas", desc: "Controle de produção e prazos personalizados." },
+    { modulo: "produtos", label: "Estoque", desc: "Catálogo de itens e controle de quantidades." },
+    { modulo: "despesas", label: "Financeiro/Despesas", desc: "Controle de custos e contas a pagar." },
+    { modulo: "agenda", label: "Agenda Global", desc: "Calendário de compromissos e entregas." },
+  ];
+
+  const getAtivo = (slug: string) => {
+    const found = modulos.find((m: any) => m.modulo === slug);
+    return found ? found.ativo === 1 : true; // Por padrão ativo
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Módulos do Sistema</CardTitle>
+        <CardDescription>Ative ou desative funcionalidades conforme sua necessidade.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {defaultModulos.map((m) => (
+          <div key={m.modulo} className="flex flex-col justify-between p-4 border rounded-xl gap-4 hover:bg-secondary/10 transition-colors">
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold">{m.label}</h4>
+                <Switch 
+                  checked={getAtivo(m.modulo)} 
+                  onCheckedChange={(checked) => onToggle(m.modulo, checked)} 
+                />
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{m.desc}</p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

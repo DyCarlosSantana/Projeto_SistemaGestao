@@ -43,13 +43,15 @@ def gerar_token(user: dict) -> str:
     """
     agora = datetime.datetime.utcnow()
     payload = {
-        'sub': str(user['id']),           # Subject: ID do usuário
+        'sub': str(user['id']),
         'nome': user.get('nome', ''),
         'email': user.get('email', ''),
         'role': user.get('role', 'operador'),
-        'empresa_id': user.get('empresa_id', 1),  # Preparação para multi-tenancy
-        'iat': agora,                              # Issued At
-        'exp': agora + datetime.timedelta(hours=JWT_EXPIRATION_HOURS),  # Expiration
+        'permissoes': user.get('permissoes', []),
+        'empresa_id': user.get('empresa_id', 1),
+        'modulos': user.get('modulos', []),   # Lista de modulos ativos do tenant
+        'iat': agora,
+        'exp': agora + datetime.timedelta(hours=JWT_EXPIRATION_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -73,10 +75,16 @@ def validar_token(token: str) -> dict | None:
 
 
 def _extrair_token_do_header() -> str | None:
-    """Extrai o Bearer token do header Authorization."""
+    """Extrai o token do header Authorization ou da query string."""
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         return auth_header[7:]
+    
+    # Suporte para exportação de PDF em nova aba que não consegue enviar headers
+    token_query = request.args.get('token')
+    if token_query:
+        return token_query
+
     return None
 
 
@@ -99,6 +107,14 @@ def get_empresa_id() -> int:
     if user:
         return int(user.get('empresa_id', 1))
     return 1
+
+
+def get_current_role() -> str:
+    """Retorna o role do usuário autenticado na requisição atual."""
+    user = get_current_user()
+    if user:
+        return user.get('role', 'operador')
+    return 'operador'
 
 
 # ─── DECORATOR DE PROTEÇÃO ────────────────────────────────────────────────────
@@ -139,15 +155,8 @@ def require_auth(f):
 
 def require_admin(f):
     """
-    Decorator que exige que o usuário autenticado tenha role 'admin'.
-    Deve ser usado em conjunto com @require_auth.
-
-    Uso:
-        @app.route('/api/usuarios')
-        @require_auth
-        @require_admin
-        def listar_usuarios():
-            ...
+    Decorator que exige role 'admin'. Deve ser usado com @require_auth.
+    Atalho para @require_role('admin').
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -159,3 +168,41 @@ def require_admin(f):
             }), 403
         return f(*args, **kwargs)
     return decorated
+
+
+def require_role(*roles):
+    """
+    Decorator granular de RBAC. Permite especificar um ou mais roles aceitos.
+
+    Roles disponíveis: 'admin', 'gerente', 'operador'
+    Hierarquia: admin > gerente > operador
+
+    Uso:
+        @app.route('/api/relatorios')
+        @require_auth
+        @require_role('admin', 'gerente')
+        def relatorios():
+            ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return jsonify({'erro': 'Nao autenticado.', 'codigo': 'NAO_AUTENTICADO'}), 401
+
+            user_role = user.get('role', 'operador')
+
+            # Admin sempre tem acesso total
+            if user_role == 'admin':
+                return f(*args, **kwargs)
+
+            if user_role not in roles:
+                return jsonify({
+                    'erro': f'Acesso negado. Permissao necessaria: {" ou ".join(roles)}.',
+                    'codigo': 'PERMISSAO_INSUFICIENTE'
+                }), 403
+
+            return f(*args, **kwargs)
+        return decorated
+    return decorator

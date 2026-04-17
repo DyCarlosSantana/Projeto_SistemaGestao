@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useCalcStore } from "@/store/calcStore";
 import { Info } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE_URL, type VendaRow } from "@/lib/api";
-import { brl, fmtDate } from "@/lib/format";
+import { brl, fmtDate, fmtDateTime } from "@/lib/format";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -101,6 +102,23 @@ export default function PDVPage() {
     },
     onError: () => toast.error("Erro ao receber fiado"),
   });
+
+  const { itemsToAdd, clearCart } = useCalcStore();
+
+  useEffect(() => {
+    if (itemsToAdd.length > 0) {
+      setItems((prev) => [...prev, ...itemsToAdd.map(i => ({
+        descricao: i.descricao,
+        quantidade: i.quantidade,
+        preco_unitario: i.preco_unitario,
+        subtotal: i.subtotal,
+        produto_id: null,
+        servico_id: null,
+      }))]);
+      setModalOpen(true);
+      clearCart();
+    }
+  }, [itemsToAdd, clearCart]);
 
   const calcTotals = useMemo(() => {
     const subtotal = items.reduce((s, i) => s + (i.subtotal || 0), 0);
@@ -221,19 +239,19 @@ export default function PDVPage() {
   });
 
   const rows = vendasQ.data || [];
-  const total = useMemo(() => rows.reduce((s, v) => s + (v.total || 0), 0), [rows]);
+  const totalPagos = useMemo(() => rows.reduce((s, v) => (v.status !== 'fiado' ? s + (v.total || 0) : s), 0), [rows]);
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Caixa / PDV</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {vendasQ.isLoading ? "Carregando…" : `${rows.length} venda(s) · Total ${brl(total)}`}
+            {vendasQ.isLoading ? "Carregando…" : `${rows.length} venda(s) · Total Pago ${brl(totalPagos)} (Fiados Não Somam no Fechamento)`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => window.open(`${API_BASE_URL}/vendas/exportar`, "_blank")}>
+          <Button variant="secondary" onClick={() => window.open(`${API_BASE_URL}/vendas/exportar?token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank")}>
             Exportar CSV
           </Button>
           <Button variant="outline" onClick={abrirNova}>
@@ -295,14 +313,17 @@ export default function PDVPage() {
               </TableRow>
             )}
             {rows.map((v: VendaRow) => (
-              <TableRow key={v.id}>
+              <TableRow key={v.id} className={v.status === 'fiado' ? "bg-amber-500/10 dark:bg-amber-900/10 border-l-[3px] border-amber-500" : ""}>
                 <TableCell className="text-muted-foreground">#{v.id}</TableCell>
-                <TableCell className="font-medium text-foreground">{v.cliente_nome || "—"}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  {v.cliente_nome || "—"}
+                  {v.status === 'fiado' && <span className="ml-2 text-[10px] uppercase font-bold text-amber-500">Fiado Aguardando Pg</span>}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{v.tipo}</TableCell>
                 <TableCell className="text-muted-foreground">{v.forma_pagamento}</TableCell>
                 <TableCell className="font-medium text-foreground">{brl(v.total)}</TableCell>
                 <TableCell>{statusBadge(v.status)}</TableCell>
-                <TableCell className="text-muted-foreground">{fmtDate(v.criado_em)}</TableCell>
+                <TableCell className="text-muted-foreground">{fmtDateTime(v.criado_em)}</TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex flex-wrap justify-end gap-2">
                     <Button size="sm" variant="outline" onClick={() => abrirEditar(v)}>
@@ -321,7 +342,7 @@ export default function PDVPage() {
                         Receber
                       </Button>
                     ) : null}
-                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/vendas/${v.id}/pdf`, "_blank")}>
+                    <Button size="sm" variant="outline" onClick={() => window.open(`${API_BASE_URL}/vendas/${v.id}/pdf?token=${sessionStorage.getItem("dycore_token") || ""}`, "_blank")}>
                       PDF
                     </Button>
                     <Button
@@ -452,7 +473,7 @@ export default function PDVPage() {
                       const s = (servicosQ.data || []).find((x: any) => x.id === id);
                       if (s) {
                         setItDesc(s.nome);
-                        setItPreco(Number(s.preco_base || 0));
+                        setItPreco(Number(s.preco || 0));
                       }
                     }}>
                       <SelectTrigger><SelectValue placeholder="Selecione o serviço..." /></SelectTrigger>
@@ -473,7 +494,7 @@ export default function PDVPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Qtd</label>
-                <Input type="number" value={itQtd} step={0.01} min={0} onChange={(e) => setItQtd(Number(e.target.value))} />
+                <Input type="number" value={itQtd} step={1} min={1} onChange={(e) => setItQtd(Number(e.target.value))} />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Valor unit.</label>
@@ -482,7 +503,7 @@ export default function PDVPage() {
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={adicionarItem} disabled={salvarM.isPending}>
+              <Button type="button" size="sm" variant="secondary" onClick={adicionarItem} disabled={salvarM.isPending}>
                 + Adicionar
               </Button>
             </div>
@@ -498,7 +519,7 @@ export default function PDVPage() {
                       </div>
                     </div>
                     <div className="text-sm font-semibold text-foreground">{brl(it.subtotal)}</div>
-                    <Button size="sm" variant="destructive" onClick={() => removerItem(idx)} disabled={salvarM.isPending}>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => removerItem(idx)} disabled={salvarM.isPending}>
                       Remover
                     </Button>
                   </div>
@@ -556,7 +577,7 @@ export default function PDVPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayModal({ open: false, id: null })}>Cancelar</Button>
             <Button onClick={() => {
-              if (payModal.id) quitarFiadoM.mutate({ id: payModal.id, forma_pagamento: payForma });
+              if (payModal.id) receberFiadoM.mutate({ id: payModal.id, forma_pagamento: payForma });
               setPayModal({ open: false, id: null });
             }}>Confirmar</Button>
           </DialogFooter>

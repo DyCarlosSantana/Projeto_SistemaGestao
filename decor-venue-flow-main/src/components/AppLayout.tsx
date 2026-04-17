@@ -1,15 +1,13 @@
-import { useState } from "react";
 import { AppSidebar } from "./AppSidebar";
-import { Search, Bell, LogOut } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <AppSidebar />
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top bar */}
         <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-6">
@@ -27,9 +25,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{user?.role}</span>
             </div>
             <div className="h-8 w-8 rounded-lg bg-gradient-brand flex items-center justify-center text-xs font-bold text-primary-foreground shadow-sm">
-              {user?.nome?.[0]?.toUpperCase() || 'A'}
+              {user?.nome?.[0]?.toUpperCase() || "A"}
             </div>
-            <div className="h-4 w-[1px] bg-border mx-1"></div>
+            <div className="h-4 w-[1px] bg-border mx-1" />
             <button
               onClick={logout}
               title="Sair do Sistema"
@@ -39,9 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );

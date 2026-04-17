@@ -49,6 +49,18 @@ if errorlevel 1 ( echo  Instalando Pillow... & %PYTHON_EXE% -m pip install pillo
 
 echo  Dependencias OK!
 echo.
+
+set /p BUILD="Deseja atualizar a interface do sistema (Build) antes de iniciar? [S/N]: "
+if /i "%BUILD%"=="S" (
+    echo.
+    echo  Reconstruindo interface... Aguarde...
+    cd /d "%~dp0\decor-venue-flow-main"
+    call npm run build
+    cd /d "%~dp0"
+    echo  Interface atualizada com sucesso!
+    echo.
+)
+
 echo  Sistema iniciando em http://localhost:5000
 echo  Nao feche esta janela durante o uso.
 echo  Para encerrar: Ctrl+C

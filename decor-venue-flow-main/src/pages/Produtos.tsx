@@ -4,7 +4,7 @@ import { api, type ProdutoRow } from "@/lib/api";
 import { brl } from "@/lib/format";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, Edit2, Trash2, Plus, Package, Search, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -21,14 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 function emptyProduto(): Partial<ProdutoRow> {
   return { nome: "", categoria: "", preco_venda: 0, estoque: 0, imagem_url: "" };
@@ -83,198 +76,240 @@ export default function ProdutosPage() {
       await qc.invalidateQueries({ queryKey: ["produtos"] });
       await qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: () => toast.error("Erro ao excluir produto"),
+    onError: () => toast.error("Erro ao excluir"),
   });
 
   const rows = useMemo(() => {
-    const all = produtosQ.data || [];
-    const ql = q.trim().toLowerCase();
-    return all.filter((p) => {
-      if (ql && !(p.nome || "").toLowerCase().includes(ql) && !((p.categoria || "").toLowerCase().includes(ql))) return false;
-      if (estoqueFiltro === "baixo" && p.estoque > 5) return false;
-      if (estoqueFiltro === "zerado" && p.estoque !== 0) return false;
-      return true;
-    });
+    let data = produtosQ.data || [];
+    if (q) {
+      const lower = q.toLowerCase();
+      data = data.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(lower) ||
+          (p.categoria || "").toLowerCase().includes(lower),
+      );
+    }
+    if (estoqueFiltro === "baixo") data = data.filter((p) => p.estoque <= 5 && p.estoque > 0);
+    if (estoqueFiltro === "zerado") data = data.filter((p) => p.estoque <= 0);
+    return data;
   }, [produtosQ.data, q, estoqueFiltro]);
 
-  const title = useMemo(() => (editing ? "Editar produto" : "Novo produto"), [editing]);
+  const estoqueColor = (n: number) => {
+    if (n <= 0) return "text-destructive bg-destructive/10";
+    if (n <= 5) return "text-warning bg-warning-light";
+    return "text-success bg-success-light";
+  };
 
   return (
-    <div className="max-w-[1200px] space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Produtos</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Controle de estoque e cadastro · {produtosQ.isLoading ? "carregando…" : `${rows.length} item(ns)`}
+            Catálogo de produtos — {rows.length} item(s)
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setEditing(null);
-              setForm(emptyProduto());
-              setOpen(true);
-            }}
-          >
-            + Novo produto
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <div className="relative max-w-sm flex-1">
-          <Input placeholder="Buscar produto…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <Select value={estoqueFiltro || "all"} onValueChange={(v: any) => setEstoqueFiltro(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Todo estoque" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todo estoque</SelectItem>
-            <SelectItem value="baixo">Estoque baixo (≤ 5)</SelectItem>
-            <SelectItem value="zerado">Estoque zerado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="secondary" onClick={() => produtosQ.refetch()} disabled={produtosQ.isFetching}>
-          Atualizar
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setForm(emptyProduto());
+            setOpen(true);
+          }}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Novo Produto
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-2 shadow-subtle">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">Img</TableHead>
-              <TableHead>Nome</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead>Preço</TableHead>
-              <TableHead>Estoque</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {produtosQ.isLoading && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Carregando…
-                </TableCell>
-              </TableRow>
-            )}
-            {produtosQ.isError && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Erro ao carregar. Verifique o backend.
-                </TableCell>
-              </TableRow>
-            )}
-            {!produtosQ.isLoading && !produtosQ.isError && rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Nenhum produto encontrado.
-                </TableCell>
-              </TableRow>
-            )}
-            {rows.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>
-                  {p.imagem_url ? (
-                    <img src={p.imagem_url} alt={p.nome} className="w-10 h-10 rounded-md object-cover border border-border" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-md bg-secondary/50 flex items-center justify-center text-muted-foreground"><ImageIcon className="w-4 h-4"/></div>
-                  )}
-                </TableCell>
-                <TableCell className="font-medium text-foreground">{p.nome}</TableCell>
-                <TableCell className="text-muted-foreground">{p.categoria || "—"}</TableCell>
-                <TableCell className="font-medium text-foreground">{brl(p.preco_venda)}</TableCell>
-                <TableCell className="text-muted-foreground">{p.estoque}</TableCell>
-                <TableCell className="text-right">
-                  <div className="inline-flex flex-wrap justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar produto..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={estoqueFiltro} onValueChange={(v) => setEstoqueFiltro(v as any)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Estoque" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="baixo">Estoque Baixo</SelectItem>
+            <SelectItem value="zerado">Estoque Zerado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Cards Grid */}
+      {produtosQ.isLoading ? (
+        <div className="py-20 text-center text-muted-foreground">Carregando produtos…</div>
+      ) : rows.length === 0 ? (
+        <div className="py-20 text-center text-muted-foreground">
+          <Package className="mx-auto h-12 w-12 mb-3 opacity-30" />
+          Nenhum produto encontrado.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {rows.map((p) => (
+            <div
+              key={p.id}
+              className="card-lift group relative rounded-2xl border border-border bg-card overflow-hidden shadow-subtle"
+            >
+              {/* Image area */}
+              <div className="relative h-40 bg-muted/30 flex items-center justify-center overflow-hidden">
+                {p.imagem_url ? (
+                  <img
+                    src={p.imagem_url}
+                    alt={p.nome}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground/40">
+                    <ImageIcon className="h-10 w-10" />
+                    <span className="text-[10px] uppercase tracking-wider">Sem imagem</span>
+                  </div>
+                )}
+
+                {/* Hover overlay actions */}
+                <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/5 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1">
+                    <button
                       onClick={() => {
                         setEditing(p);
                         setForm(p);
                         setOpen(true);
                       }}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-primary shadow-sm hover:bg-white transition-colors"
                     >
-                      Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
                       onClick={() => {
-                        if (confirm("Excluir este produto?")) deleteM.mutate(p.id);
+                        if (confirm(`Excluir "${p.nome}"?`)) deleteM.mutate(p.id);
                       }}
-                      disabled={deleteM.isPending}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-destructive shadow-sm hover:bg-white transition-colors"
                     >
-                      Excluir
-                    </Button>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[620px]">
-          <form onSubmit={(e) => { e.preventDefault(); saveM.mutate(); }}>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>Cadastro do produto e controle de estoque.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Nome *</label>
-              <Input value={form.nome || ""} onChange={(e) => setForm((p) => ({ ...p, nome: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Categoria</label>
-              <Input value={form.categoria || ""} onChange={(e) => setForm((p) => ({ ...p, categoria: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Preço *</label>
-              <Input
-                inputMode="decimal"
-                value={String(form.preco_venda ?? "")}
-                onChange={(e) => setForm((p) => ({ ...p, preco_venda: Number(e.target.value.replace(",", ".")) }))}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Estoque</label>
-              <Input
-                inputMode="numeric"
-                value={String(form.estoque ?? "")}
-                onChange={(e) => setForm((p) => ({ ...p, estoque: Number(e.target.value) }))}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">URL da Imagem</label>
-              <div className="flex gap-3 mt-1">
-                {form.imagem_url ? (
-                  <img src={form.imagem_url} alt="preview" className="w-12 h-12 rounded-lg object-cover border border-border shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-lg bg-secondary/50 flex items-center justify-center text-muted-foreground shrink-0"><ImageIcon className="w-5 h-5"/></div>
+                {/* Stock badge */}
+                {p.estoque <= 5 && (
+                  <div className="absolute top-2 left-2">
+                    <Badge variant="secondary" className={`text-[10px] font-bold ${estoqueColor(p.estoque)}`}>
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      {p.estoque <= 0 ? "Sem estoque" : `Estoque: ${p.estoque}`}
+                    </Badge>
+                  </div>
                 )}
-                <Input value={form.imagem_url || ""} onChange={(e) => setForm((p) => ({ ...p, imagem_url: e.target.value }))} placeholder="https://..." className="flex-1" />
+              </div>
+
+              {/* Info */}
+              <div className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-display text-sm font-semibold text-foreground leading-tight line-clamp-2">
+                    {p.nome}
+                  </h3>
+                </div>
+
+                {p.categoria && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {p.categoria}
+                  </Badge>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="font-display text-lg font-bold text-primary">
+                    {brl(p.preco_venda)}
+                  </span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${estoqueColor(p.estoque)}`}>
+                    {p.estoque > 5 ? `${p.estoque} un.` : p.estoque <= 0 ? "Esgotado" : `${p.estoque} un.`}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saveM.isPending}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={saveM.isPending}>
-              {saveM.isPending ? "Salvando…" : "Salvar"}
-            </Button>
-          </DialogFooter>
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveM.mutate();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{editing ? "Editar Produto" : "Novo Produto"}</DialogTitle>
+              <DialogDescription>Informe os dados do produto.</DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Nome *</label>
+                <Input
+                  autoFocus
+                  value={form.nome || ""}
+                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  placeholder="Nome do produto"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Categoria</label>
+                  <Input
+                    value={form.categoria || ""}
+                    onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                    placeholder="Ex: Caneca"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">URL da Imagem</label>
+                  <Input
+                    value={form.imagem_url || ""}
+                    onChange={(e) => setForm({ ...form, imagem_url: e.target.value })}
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Preço de Venda *</label>
+                  <Input
+                    type="number"
+                    step={0.01}
+                    value={form.preco_venda || ""}
+                    onChange={(e) => setForm({ ...form, preco_venda: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Estoque</label>
+                  <Input
+                    type="number"
+                    value={form.estoque ?? 0}
+                    onChange={(e) => setForm({ ...form, estoque: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saveM.isPending}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saveM.isPending}>
+                {saveM.isPending ? "Salvando…" : editing ? "Salvar" : "Criar Produto"}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
