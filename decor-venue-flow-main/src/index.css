@@ -78,6 +78,12 @@
     --shadow-sm: 0 1px 2px 0 hsl(225 15% 14% / 0.03);
     --shadow-card: 0 1px 3px 0 hsl(225 15% 14% / 0.05), 0 1px 2px -1px hsl(225 15% 14% / 0.04);
     --shadow-lg: 0 10px 25px -5px hsl(225 15% 14% / 0.07), 0 8px 10px -6px hsl(225 15% 14% / 0.03);
+
+    /* Trillo Theme — Reference Colors */
+    --trillo-bg: 60 8% 96%;
+    --trillo-orange: 14 100% 50%;
+    --trillo-lime: 71 84% 55%;
+    --trillo-dark: 0 0% 4%;
   }
 
   .dark {

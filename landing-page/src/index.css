@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%; /* #f8fafc */
+    --foreground: 222 47% 11%; /* #0f172a */
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 335 87% 55%; /* #f23c8b */
+    --accent: 38 92% 59%; /* #f4b339 */
+    --border: 214 32% 91%;
+    --radius: 1.5rem;
+  }
+
+  body {
+    @apply bg-[#f8fafc] text-[#0f172a] antialiased overflow-x-hidden;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+    @apply tracking-tight font-extrabold;
+  }
+}
+
+.soft-gradient-bg {
+  background: radial-gradient(circle at 50% -20%, rgba(44, 153, 228, 0.1) 0%, rgba(242, 60, 139, 0.05) 50%, transparent 100%);
+}
+
+.glass-morphism-light {
+  @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl shadow-black/5;
+}
+
+.card-solid {
+  @apply bg-white border border-black/5 shadow-2xl shadow-black/[0.02] rounded-[1.5rem];
+}
+
+.btn-primary {
+  @apply bg-[#0f172a] text-white hover:bg-black transition-all duration-300 rounded-full px-8 py-4 font-bold;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[#0f172a] to-dycore-pink;
+}

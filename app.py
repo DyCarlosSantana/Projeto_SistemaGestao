@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template, make_response
+from flask import Flask, request, jsonify, send_file, render_template, make_response, send_from_directory
 from database import get_db, init_db
 from auth import require_auth, require_admin, gerar_token, get_current_user, get_empresa_id
 import datetime, os, json
@@ -12,10 +12,11 @@ except ImportError:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
-TEMPLATE_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
-STATIC_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
+# Diretórios dos dois projetos frontend
+LANDING_DIR = os.path.join(BASE_DIR, 'landing-page', 'dist')
+APP_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
 
-print(f"Pasta: {BASE_DIR}")
+print(f"Pasta Base: {BASE_DIR}")
 
 try:
     from pdf_generator import gerar_orcamento_pdf, gerar_nota_venda_pdf, gerar_pdf_locacao, gerar_relatorio_pdf, gerar_pdf_encomenda
@@ -24,7 +25,7 @@ except ImportError:
     PDF_OK = False
     print("AVISO: reportlab nao encontrado. PDFs desabilitados.")
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/_static_hidden')
+app = Flask(__name__, template_folder=APP_DIR, static_folder=APP_DIR, static_url_path='/_static_hidden')
 
 # CORS manual - permite acesso do navegador local
 @app.after_request
@@ -444,6 +445,204 @@ def upload_logo():
         return jsonify({'ok': True, 'logo': data_uri})
     except Exception as e:
         return jsonify({'erro': str(e)}), 500
+
+# ─── MÓDULOS DA EMPRESA ───────────────────────────────────────────────────────
+
+@app.route('/api/configuracoes/modulos', methods=['GET'])
+@require_auth
+def listar_modulos():
+    eid = get_empresa_id()
+    db = get_db()
+    rows = rows_to_list(db.execute(
+        "SELECT * FROM modulos_empresa WHERE empresa_id=?", (eid,)
+    ).fetchall())
+    db.close()
+    return jsonify(rows)
+
+@app.route('/api/configuracoes/modulos/toggle', methods=['POST'])
+@require_auth
+@require_admin
+def toggle_modulo():
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    modulo = d.get('modulo', '')
+    ativo = 1 if d.get('ativo', True) else 0
+    if not modulo:
+        return jsonify({'erro': 'Modulo obrigatório'}), 400
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM modulos_empresa WHERE empresa_id=? AND modulo=?", (eid, modulo)
+    ).fetchone()
+    if existing:
+        db.execute(
+            "UPDATE modulos_empresa SET ativo=? WHERE empresa_id=? AND modulo=?",
+            (ativo, eid, modulo)
+        )
+    else:
+        db.execute(
+            "INSERT INTO modulos_empresa (empresa_id, modulo, ativo) VALUES (?,?,?)",
+            (eid, modulo, ativo)
+        )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'modulo': modulo, 'ativo': ativo})
+
+# ─── CATEGORIAS DE DESPESA ────────────────────────────────────────────────────
+
+@app.route('/api/configuracoes/categorias-despesa', methods=['GET'])
+@require_auth
+def listar_categorias_despesa():
+    eid = get_empresa_id()
+    db = get_db()
+    rows = rows_to_list(db.execute(
+        "SELECT * FROM categorias_despesa WHERE empresa_id=? AND ativo=1 ORDER BY padrao DESC, nome ASC",
+        (eid,)
+    ).fetchall())
+    db.close()
+    return jsonify(rows)
+
+@app.route('/api/configuracoes/categorias-despesa', methods=['POST'])
+@require_auth
+@require_admin
+def criar_categoria_despesa():
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    nome = d.get('nome', '').strip()
+    if not nome:
+        return jsonify({'erro': 'Nome obrigatório'}), 400
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO categorias_despesa (empresa_id, nome, cor, padrao) VALUES (?,?,?,?)",
+        (eid, nome, d.get('cor', '#6B7280'), 0)
+    )
+    db.commit()
+    row = row_to_dict(db.execute("SELECT * FROM categorias_despesa WHERE id=?", (cur.lastrowid,)).fetchone())
+    db.close()
+    return jsonify(row), 201
+
+@app.route('/api/configuracoes/categorias-despesa/<int:id>', methods=['PUT'])
+@require_auth
+@require_admin
+def atualizar_categoria_despesa(id):
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    db = get_db()
+    db.execute(
+        "UPDATE categorias_despesa SET nome=?, cor=? WHERE id=? AND empresa_id=? AND padrao=0",
+        (d.get('nome', ''), d.get('cor', '#6B7280'), id, eid)
+    )
+    db.commit()
+    row = row_to_dict(db.execute("SELECT * FROM categorias_despesa WHERE id=?", (id,)).fetchone())
+    db.close()
+    return jsonify(row)
+
+@app.route('/api/configuracoes/categorias-despesa/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
+def excluir_categoria_despesa(id):
+    eid = get_empresa_id()
+    db = get_db()
+    db.execute(
+        "UPDATE categorias_despesa SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+# ─── FORMAS DE PAGAMENTO ──────────────────────────────────────────────────────
+
+@app.route('/api/configuracoes/formas-pagamento', methods=['GET'])
+@require_auth
+def listar_formas_pagamento():
+    eid = get_empresa_id()
+    db = get_db()
+    rows = rows_to_list(db.execute(
+        "SELECT * FROM formas_pagamento WHERE empresa_id=? AND ativo=1 ORDER BY padrao DESC, nome ASC",
+        (eid,)
+    ).fetchall())
+    db.close()
+    return jsonify(rows)
+
+@app.route('/api/configuracoes/formas-pagamento', methods=['POST'])
+@require_auth
+@require_admin
+def criar_forma_pagamento():
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    nome = d.get('nome', '').strip()
+    if not nome:
+        return jsonify({'erro': 'Nome obrigatório'}), 400
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO formas_pagamento (empresa_id, nome, tipo, padrao) VALUES (?,?,?,?)",
+            (eid, nome, d.get('tipo', 'outros'), 0)
+        )
+        db.commit()
+        row = row_to_dict(db.execute("SELECT * FROM formas_pagamento WHERE id=?", (cur.lastrowid,)).fetchone())
+        db.close()
+        return jsonify(row), 201
+    except Exception as e:
+        db.close()
+        return jsonify({'erro': 'Forma de pagamento já existe'}), 409
+
+@app.route('/api/configuracoes/formas-pagamento/<int:id>', methods=['PUT'])
+@require_auth
+@require_admin
+def atualizar_forma_pagamento(id):
+    eid = get_empresa_id()
+    d = request.get_json(force=True, silent=True) or {}
+    db = get_db()
+    db.execute(
+        "UPDATE formas_pagamento SET nome=?, tipo=? WHERE id=? AND empresa_id=?",
+        (d.get('nome', ''), d.get('tipo', 'outros'), id, eid)
+    )
+    db.commit()
+    row = row_to_dict(db.execute("SELECT * FROM formas_pagamento WHERE id=?", (id,)).fetchone())
+    db.close()
+    return jsonify(row)
+
+@app.route('/api/configuracoes/formas-pagamento/<int:id>', methods=['DELETE'])
+@require_auth
+@require_admin
+def excluir_forma_pagamento(id):
+    eid = get_empresa_id()
+    db = get_db()
+    db.execute(
+        "UPDATE formas_pagamento SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid)
+    )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
+# ─── ALTERAR PRÓPRIA SENHA ────────────────────────────────────────────────────
+
+@app.route('/api/me/senha', methods=['PUT'])
+@require_auth
+def alterar_minha_senha():
+    """Permite ao usuário logado trocar a própria senha."""
+    user = get_current_user()
+    d = request.get_json(force=True, silent=True) or {}
+    senha_atual = d.get('senha_atual', '')
+    nova_senha = d.get('nova_senha', '')
+    if not senha_atual or not nova_senha:
+        return jsonify({'erro': 'Senha atual e nova senha são obrigatórias'}), 400
+    if len(nova_senha) < 4:
+        return jsonify({'erro': 'A nova senha deve ter pelo menos 4 caracteres'}), 400
+
+    db = get_db()
+    row = db.execute("SELECT senha_hash FROM usuarios WHERE id=?", (user['sub'],)).fetchone()
+    if not row or not check_password_hash(row['senha_hash'], senha_atual):
+        db.close()
+        return jsonify({'erro': 'Senha atual incorreta'}), 401
+
+    db.execute(
+        "UPDATE usuarios SET senha_hash=? WHERE id=?",
+        (generate_password_hash(nova_senha), user['sub'])
+    )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'mensagem': 'Senha alterada com sucesso'})
 
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
@@ -1037,11 +1236,12 @@ def proximos_eventos():
 @app.route('/api/agenda', methods=['POST'])
 @require_auth
 def criar_evento():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO agenda (titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, locacao_id, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (d.get('titulo',''), d.get('tipo','compromisso'), d.get('data_inicio',''),
+        "INSERT INTO agenda (empresa_id, titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, locacao_id, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (eid, d.get('titulo',''), d.get('tipo','compromisso'), d.get('data_inicio',''),
          d.get('data_fim', d.get('data_inicio','')), d.get('hora_inicio','08:00'),
          d.get('hora_fim','09:00'), d.get('cliente_nome',''), d.get('descricao',''),
          d.get('status','pendente'), d.get('locacao_id'), d.get('encomenda_id'),
@@ -1055,25 +1255,27 @@ def criar_evento():
 @app.route('/api/agenda/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_evento(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE agenda SET titulo=?, tipo=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, cliente_nome=?, descricao=?, status=?, cor=? WHERE id=?",
+        "UPDATE agenda SET titulo=?, tipo=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, cliente_nome=?, descricao=?, status=?, cor=? WHERE id=? AND empresa_id=?",
         (d.get('titulo',''), d.get('tipo','compromisso'), d.get('data_inicio',''),
          d.get('data_fim', d.get('data_inicio','')), d.get('hora_inicio','08:00'),
          d.get('hora_fim','09:00'), d.get('cliente_nome',''), d.get('descricao',''),
-         d.get('status','pendente'), d.get('cor','#534AB7'), id)
+         d.get('status','pendente'), d.get('cor','#534AB7'), id, eid)
     )
     db.commit()
-    row = row_to_dict(db.execute("SELECT * FROM agenda WHERE id=?", (id,)).fetchone())
+    row = row_to_dict(db.execute("SELECT * FROM agenda WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     db.close()
     return jsonify(row)
 
 @app.route('/api/agenda/<int:id>', methods=['DELETE'])
 @require_auth
 def deletar_evento(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("DELETE FROM agenda WHERE id=?", (id,))
+    db.execute("DELETE FROM agenda WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1091,21 +1293,20 @@ def itens_locacao_get(id):
 @app.route('/api/locacoes', methods=['GET'])
 @require_auth
 def listar_locacoes():
+    eid = get_empresa_id()
     db = get_db()
     status = request.args.get('status', '')
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
     q = request.args.get('q', '')
-    where, params = [], []
+    where, params = ["empresa_id=?"], [eid]
     if status:
         where.append("status=?"); params.append(status)
     if data_ini and data_fim:
         where.append("data_retirada BETWEEN ? AND ?"); params += [data_ini, data_fim]
     if q:
         where.append("cliente_nome LIKE ?"); params.append(f'%{q}%')
-    sql = "SELECT * FROM locacoes"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
+    sql = "SELECT * FROM locacoes WHERE " + " AND ".join(where)
     sql += " ORDER BY criado_em DESC LIMIT 200"
     rows = db.execute(sql, params).fetchall()
     db.close()
@@ -1234,23 +1435,25 @@ def converter_locacao_venda(id):
 @app.route('/api/itens-locacao', methods=['GET'])
 @require_auth
 def listar_itens_locacao():
+    eid = get_empresa_id()
     db = get_db()
     q = request.args.get('q', '')
     if q:
-        rows = db.execute("SELECT * FROM itens_locacao WHERE ativo=1 AND nome LIKE ? ORDER BY nome", (f'%{q}%',)).fetchall()
+        rows = db.execute("SELECT * FROM itens_locacao WHERE ativo=1 AND empresa_id=? AND nome LIKE ? ORDER BY nome", (eid, f'%{q}%')).fetchall()
     else:
-        rows = db.execute("SELECT * FROM itens_locacao WHERE ativo=1 ORDER BY nome").fetchall()
+        rows = db.execute("SELECT * FROM itens_locacao WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/itens-locacao', methods=['POST'])
 @require_auth
 def criar_item_locacao():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO itens_locacao (nome, descricao, categoria, preco_diaria, quantidade_total) VALUES (?,?,?,?,?)",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1))
+        "INSERT INTO itens_locacao (empresa_id, nome, descricao, categoria, preco_diaria, quantidade_total) VALUES (?,?,?,?,?,?)",
+        (eid, d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1))
     )
     db.commit()
     row = db.execute("SELECT * FROM itens_locacao WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1260,14 +1463,15 @@ def criar_item_locacao():
 @app.route('/api/itens-locacao/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_item_locacao(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE itens_locacao SET nome=?, descricao=?, categoria=?, preco_diaria=?, quantidade_total=? WHERE id=?",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1), id)
+        "UPDATE itens_locacao SET nome=?, descricao=?, categoria=?, preco_diaria=?, quantidade_total=? WHERE id=? AND empresa_id=?",
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1), id, eid)
     )
     db.commit()
-    row = db.execute("SELECT * FROM itens_locacao WHERE id=?", (id,)).fetchone()
+    row = db.execute("SELECT * FROM itens_locacao WHERE id=? AND empresa_id=?", (id, eid)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
 
@@ -1275,8 +1479,9 @@ def atualizar_item_locacao(id):
 @require_auth
 @require_admin
 def deletar_item_locacao(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("UPDATE itens_locacao SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE itens_locacao SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1284,8 +1489,9 @@ def deletar_item_locacao(id):
 @app.route('/api/kits', methods=['GET'])
 @require_auth
 def listar_kits():
+    eid = get_empresa_id()
     db = get_db()
-    kits = rows_to_list(db.execute("SELECT * FROM kits_locacao WHERE ativo=1 ORDER BY nome").fetchall())
+    kits = rows_to_list(db.execute("SELECT * FROM kits_locacao WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall())
     for kit in kits:
         itens = db.execute("""
             SELECT ki.quantidade, il.nome, il.preco_diaria
@@ -1299,16 +1505,17 @@ def listar_kits():
 @app.route('/api/kits', methods=['POST'])
 @require_auth
 def criar_kit():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO kits_locacao (nome, descricao, preco_total) VALUES (?,?,?)",
-        (d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0))
+        "INSERT INTO kits_locacao (empresa_id, nome, descricao, preco_total) VALUES (?,?,?,?)",
+        (eid, d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0))
     )
     kit_id = cur.lastrowid
     for item in d.get('itens', []):
-        db.execute("INSERT INTO kit_itens (kit_id, item_id, quantidade) VALUES (?,?,?)",
-                   (kit_id, item['item_id'], item.get('quantidade',1)))
+        db.execute("INSERT INTO kit_itens (empresa_id, kit_id, item_id, quantidade) VALUES (?,?,?,?)",
+                   (eid, kit_id, item['item_id'], item.get('quantidade',1)))
     db.commit()
     row = db.execute("SELECT * FROM kits_locacao WHERE id=?", (kit_id,)).fetchone()
     db.close()
@@ -1317,16 +1524,17 @@ def criar_kit():
 @app.route('/api/kits/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_kit(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    db.execute("UPDATE kits_locacao SET nome=?, descricao=?, preco_total=? WHERE id=?",
-               (d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0), id))
+    db.execute("UPDATE kits_locacao SET nome=?, descricao=?, preco_total=? WHERE id=? AND empresa_id=?",
+               (d.get('nome',''), d.get('descricao',''), d.get('preco_total', 0), id, eid))
     db.execute("DELETE FROM kit_itens WHERE kit_id=?", (id,))
     for item in d.get('itens', []):
-        db.execute("INSERT INTO kit_itens (kit_id, item_id, quantidade) VALUES (?,?,?)",
-                   (id, item['item_id'], item.get('quantidade',1)))
+        db.execute("INSERT INTO kit_itens (empresa_id, kit_id, item_id, quantidade) VALUES (?,?,?,?)",
+                   (eid, id, item['item_id'], item.get('quantidade',1)))
     db.commit()
-    row = db.execute("SELECT * FROM kits_locacao WHERE id=?", (id,)).fetchone()
+    row = db.execute("SELECT * FROM kits_locacao WHERE id=? AND empresa_id=?", (id, eid)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
 
@@ -1334,9 +1542,10 @@ def atualizar_kit(id):
 @require_auth
 @require_admin
 def deletar_kit(id):
+    eid = get_empresa_id()
     db = get_db()
     db.execute("DELETE FROM kit_itens WHERE kit_id=?", (id,))
-    db.execute("UPDATE kits_locacao SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE kits_locacao SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -2184,19 +2393,42 @@ def converter_orcamento_locacao(id):
 @app.route('/<path:path>')
 def serve_react(path):
     if path.startswith('api/'):
-        from flask import jsonify
         return jsonify({'erro': 'Endpoint não encontrado'}), 404
     
-    # Serve static assets manually
-    if path and os.path.exists(os.path.join(app.static_folder, path)):
-        from flask import send_from_directory
-        return send_from_directory(app.static_folder, path)
+    # 1. Tenta servir como arquivo estático da Landing Page
+    landing_file = os.path.join(LANDING_DIR, path)
+    if path and os.path.exists(landing_file) and not os.path.isdir(landing_file):
+        return send_from_directory(LANDING_DIR, path)
         
-    index_path = os.path.join(TEMPLATE_DIR, 'index.html')
-    if os.path.exists(index_path):
-        from flask import send_file
-        return send_file(index_path)
-    return "Aguarde, gerando Frontend...", 404
+    # 2. Tenta servir como arquivo estático do App
+    app_file = os.path.join(APP_DIR, path)
+    if path and os.path.exists(app_file) and not os.path.isdir(app_file):
+        return send_from_directory(APP_DIR, path)
+        
+    # 3. Lógica de Roteamento (SPA)
+    # Lista de rotas que pertencem ao sistema de gestão (App)
+    app_routes = [
+        'login', 'dashboard', 'pdv', 'locacoes', 'orcamentos', 
+        'relatorios', 'clientes', 'produtos', 'itens-locacao', 
+        'calculadora', 'despesas', 'fluxo', 'fiado', 'agenda', 
+        'encomendas', 'servicos', 'configuracoes'
+    ]
+    
+    first_segment = path.split('/')[0] if path else ''
+    
+    # Se a rota for do App, serve o index do App
+    if first_segment in app_routes:
+        index_app = os.path.join(APP_DIR, 'index.html')
+        if os.path.exists(index_app):
+            return send_file(index_app)
+        return "Frontend do Sistema não encontrado. Execute 'npm run build' no diretório do sistema.", 404
+
+    # Por padrão, serve a Landing Page
+    index_landing = os.path.join(LANDING_DIR, 'index.html')
+    if os.path.exists(index_landing):
+        return send_file(index_landing)
+        
+    return "Landing Page não encontrada. Execute 'npm run build' no diretório da landing page.", 404
 
 
 if __name__ == '__main__':

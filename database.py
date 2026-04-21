@@ -438,6 +438,35 @@ CREATE TABLE IF NOT EXISTS agenda (
     cor TEXT DEFAULT '#534AB7',
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS modulos_empresa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER DEFAULT 1,
+    modulo TEXT NOT NULL,
+    ativo INTEGER DEFAULT 1,
+    UNIQUE(empresa_id, modulo)
+);
+
+CREATE TABLE IF NOT EXISTS categorias_despesa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER DEFAULT 1,
+    nome TEXT NOT NULL,
+    cor TEXT DEFAULT '#6B7280',
+    padrao INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS formas_pagamento (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER DEFAULT 1,
+    nome TEXT NOT NULL,
+    tipo TEXT DEFAULT 'outros',
+    ativo INTEGER DEFAULT 1,
+    padrao INTEGER DEFAULT 0,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(empresa_id, nome)
+);
 """
 
 
@@ -555,6 +584,59 @@ def _seed_dados_iniciais(db):
         db.execute(
             "INSERT INTO usuarios (empresa_id, nome, email, senha_hash, role) VALUES (?,?,?,?,?)",
             (1, "Administrador", "admin@dycore.com", senha_admin, "admin")
+        )
+        db.commit()
+
+    # Módulos padrão
+    row = db.execute("SELECT COUNT(*) FROM modulos_empresa").fetchone()
+    if row[0] == 0:
+        modulos_padrao = [
+            (1, 'vendas', 1), (1, 'locacoes', 1), (1, 'encomendas', 1),
+            (1, 'produtos', 1), (1, 'despesas', 1), (1, 'agenda', 1),
+            (1, 'calculadora', 1), (1, 'servicos', 1),
+        ]
+        db.executemany(
+            "INSERT INTO modulos_empresa (empresa_id, modulo, ativo) VALUES (?,?,?)",
+            modulos_padrao
+        )
+        db.commit()
+
+    # Categorias de despesa padrão
+    row = db.execute("SELECT COUNT(*) FROM categorias_despesa").fetchone()
+    if row[0] == 0:
+        categorias_padrao = [
+            (1, 'Material / Insumos', '#3B82F6', 1),
+            (1, 'Aluguel / Espaço', '#8B5CF6', 1),
+            (1, 'Energia / Água', '#F59E0B', 1),
+            (1, 'Internet / Telefone', '#06B6D4', 1),
+            (1, 'Salários / Pessoal', '#EF4444', 1),
+            (1, 'Transporte / Entrega', '#10B981', 1),
+            (1, 'Impostos / Taxas', '#F97316', 1),
+            (1, 'Manutenção', '#6366F1', 1),
+            (1, 'Marketing / Publicidade', '#EC4899', 1),
+            (1, 'Outros', '#6B7280', 1),
+        ]
+        db.executemany(
+            "INSERT INTO categorias_despesa (empresa_id, nome, cor, padrao) VALUES (?,?,?,?)",
+            categorias_padrao
+        )
+        db.commit()
+
+    # Formas de pagamento padrão
+    row = db.execute("SELECT COUNT(*) FROM formas_pagamento").fetchone()
+    if row[0] == 0:
+        formas_padrao = [
+            (1, 'Dinheiro', 'dinheiro', 1, 1),
+            (1, 'PIX', 'pix', 1, 1),
+            (1, 'Cartão Débito', 'debito', 1, 1),
+            (1, 'Cartão Crédito', 'credito', 1, 1),
+            (1, 'Boleto', 'boleto', 1, 0),
+            (1, 'Transferência', 'transferencia', 1, 0),
+            (1, 'Fiado', 'fiado', 1, 0),
+        ]
+        db.executemany(
+            "INSERT INTO formas_pagamento (empresa_id, nome, tipo, ativo, padrao) VALUES (?,?,?,?,?)",
+            formas_padrao
         )
         db.commit()
 

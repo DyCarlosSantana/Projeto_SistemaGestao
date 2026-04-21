@@ -55,9 +55,7 @@ export default function Login() {
         <div className="relative z-10 flex flex-col h-full justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 backdrop-blur-xl font-display text-lg font-bold text-white shadow-lg">
-                D
-              </div>
+              <img src="/logo.png" alt="Dycore" className="h-11 w-11 rounded-xl object-contain shadow-lg bg-white/10 backdrop-blur-xl p-1" />
               <span className="font-display text-xl font-bold text-white/90">Dycore</span>
             </div>
           </div>
@@ -84,9 +82,7 @@ export default function Login() {
         <div className="login-form-container w-full max-w-[420px] space-y-8">
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-3 justify-center mb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand font-display text-sm font-bold text-primary-foreground shadow-md">
-              D
-            </div>
+            <img src="/logo.png" alt="Dycore" className="h-14 w-14 rounded-xl object-contain shadow-md p-1 bg-white/5" />
           </div>
 
           <div>

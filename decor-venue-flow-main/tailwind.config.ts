@@ -91,6 +91,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        trillo: {
+          bg: "hsl(var(--trillo-bg))",
+          orange: "hsl(var(--trillo-orange))",
+          lime: "hsl(var(--trillo-lime))",
+          dark: "hsl(var(--trillo-dark))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

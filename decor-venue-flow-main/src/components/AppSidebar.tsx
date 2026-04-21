@@ -22,7 +22,7 @@ export function AppSidebar() {
   });
 
   const empNome = config?.empresa_nome || "Dycore";
-  const logoUrl = config?.logo_path;
+  const logoUrl = config?.logo_path || "/logo.png";
 
   /** Verifica se um grupo / filho deve ser exibido */
   const shouldShow = (item: { modulo?: string | null; minRole?: "admin" | "gerente" }) => {
@@ -71,6 +71,11 @@ export function AppSidebar() {
 
   const visibleGroups = navigation.filter(shouldShow);
 
+  const getLogoSrc = (path: string) => {
+    if (path.startsWith('data:') || path.startsWith('/')) return path;
+    return `${API_BASE_URL}${path}`;
+  };
+
   return (
     <>
       {/* Sidebar rail — always 68px */}
@@ -80,17 +85,19 @@ export function AppSidebar() {
       >
         {/* Logo */}
         <div className="flex h-16 w-full items-center justify-center">
-          {logoUrl ? (
-            <img
-              src={`${API_BASE_URL}${logoUrl}`}
-              alt="Logo"
-              className="h-9 w-9 rounded-xl object-contain"
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand font-display text-sm font-bold text-primary-foreground shadow-md">
-              {empNome.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <img
+            src={getLogoSrc(logoUrl)}
+            alt="Logo"
+            className="h-9 w-9 rounded-xl object-contain shadow-sm"
+            onError={(e) => {
+              // Fallback se a imagem falhar
+              (e.target as any).style.display = 'none';
+              (e.target as any).nextSibling.style.display = 'flex';
+            }}
+          />
+          <div className="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand font-display text-sm font-bold text-primary-foreground shadow-md">
+            {empNome.charAt(0).toUpperCase()}
+          </div>
         </div>
 
         {/* Nav icons */}
