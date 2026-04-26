@@ -15,7 +15,15 @@ import sqlite3
 # Carrega variáveis de ambiente
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Se uma variável de ambiente APP_ENV já estiver definida (pelo script .bat),
+    # carregamos o arquivo correspondente. Senão, tentamos carregar o padrão.
+    app_env = os.environ.get("APP_ENV")
+    if app_env == "production":
+        load_dotenv(".env.prod")
+    elif app_env == "development":
+        load_dotenv(".env.dev")
+    else:
+        load_dotenv() # Fallback para .env padrão
 except ImportError:
     pass
 
@@ -238,6 +246,15 @@ CREATE TABLE IF NOT EXISTS produtos (
     ativo INTEGER DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS cargos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER DEFAULT 1,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ativo INTEGER DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     empresa_id INTEGER DEFAULT 1,
@@ -248,15 +265,6 @@ CREATE TABLE IF NOT EXISTS usuarios (
     cargo_id INTEGER REFERENCES cargos(id),
     ativo INTEGER DEFAULT 1,
     ultimo_login TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS cargos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER DEFAULT 1,
-    nome TEXT NOT NULL,
-    descricao TEXT,
-    ativo INTEGER DEFAULT 1,
-    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS cargo_permissoes (
@@ -656,3 +664,6 @@ def init_db():
         raise
     finally:
         db.close()
+
+if __name__ == "__main__":
+    init_db()
