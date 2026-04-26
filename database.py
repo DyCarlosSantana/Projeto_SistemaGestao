@@ -334,6 +334,7 @@ CREATE TABLE IF NOT EXISTS locacoes (
     forma_pagamento TEXT,
     status TEXT DEFAULT 'ativo',
     obs TEXT,
+    valor_entrada REAL DEFAULT 0,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -361,6 +362,7 @@ CREATE TABLE IF NOT EXISTS orcamentos (
     total REAL NOT NULL,
     status TEXT DEFAULT 'aberto',
     obs TEXT,
+    valor_entrada REAL DEFAULT 0,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -405,6 +407,7 @@ CREATE TABLE IF NOT EXISTS encomendas (
     data_entrega DATE,
     total REAL DEFAULT 0,
     sinal REAL DEFAULT 0,
+    valor_entrada REAL DEFAULT 0,
     orcamento_id INTEGER REFERENCES orcamentos(id),
     obs TEXT,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP

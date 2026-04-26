@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE_URL } from "@/lib/api";
 import { brl, fmtDate } from "@/lib/format";
@@ -57,7 +58,11 @@ export default function EncomendasPage() {
   const [status, setStatus] = useState("pedido");
   const [dataEntrega, setDataEntrega] = useState("");
   const [total, setTotal] = useState<number>(0);
+  const [valorEntrada, setValorEntrada] = useState<number>(0);
   const [obs, setObs] = useState("");
+  const navigate = useNavigate();
+  const [payModal, setPayModal] = useState<{open: boolean; id: number | null}>({open: false, id: null});
+  const [payForma, setPayForma] = useState("dinheiro");
 
   const encomendasQ = useQuery({
     queryKey: ["encomendas", busca, statusFiltro],
@@ -84,7 +89,7 @@ export default function EncomendasPage() {
       if (!clienteNome.trim()) throw new Error("Informe o cliente");
       if (!descricao.trim()) throw new Error("Informe a descrição");
       return api.salvarEncomenda(
-        { cliente_nome: clienteNome, descricao, data_entrega: dataEntrega, status, total, obs },
+        { cliente_nome: clienteNome, descricao, data_entrega: dataEntrega, status, total, valor_entrada: valorEntrada, obs },
         editId ?? undefined,
       );
     },
@@ -108,6 +113,22 @@ export default function EncomendasPage() {
     onError: () => toast.error("Erro ao atualizar status"),
   });
 
+  const faturarM = useMutation({
+    mutationFn: ({ id, forma_pagamento }: { id: number; forma_pagamento: string }) =>
+      api.converterEncomendaVenda(id, forma_pagamento),
+    onSuccess: async (d: any, variables) => {
+      toast.success(`Encomenda faturada! Venda #${d?.venda?.id ?? ""} criada!`);
+      await qc.invalidateQueries({ queryKey: ["encomendas"] });
+      await qc.invalidateQueries({ queryKey: ["dashboard"] });
+      await qc.invalidateQueries({ queryKey: ["vendas"] });
+      setPayModal({ open: false, id: null });
+      if (variables.forma_pagamento === "fiado") {
+        navigate("/fiado");
+      }
+    },
+    onError: () => toast.error("Erro ao faturar encomenda"),
+  });
+
   function resetForm() {
     setEditId(null);
     setClienteNome("");
@@ -115,6 +136,7 @@ export default function EncomendasPage() {
     setStatus("pedido");
     setDataEntrega("");
     setTotal(0);
+    setValorEntrada(0);
     setObs("");
   }
 
@@ -126,6 +148,8 @@ export default function EncomendasPage() {
     setStatus(e.status || "pedido");
     setDataEntrega(e.data_entrega || "");
     setTotal(e.total || 0);
+    setValorEntrada(e.valor_entrada || 0);
+    setObs(e.obs || "");
     setObs(e.obs || "");
     setModalOpen(true);
   }
@@ -269,18 +293,27 @@ export default function EncomendasPage() {
                   </div>
                 </div>
 
-                {/* Info row */}
-                <div className="px-4 pb-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span className={isAtrasado ? "text-warning font-semibold" : ""}>
-                      {enc.data_entrega ? fmtDate(enc.data_entrega) : "Sem prazo"}
-                      {isAtrasado && " (!)"}
-                    </span>
+                <div className="px-4 pb-3 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />
+                      <span className={isAtrasado ? "text-warning font-semibold" : ""}>
+                        {enc.data_entrega ? fmtDate(enc.data_entrega) : "Sem prazo"}
+                        {isAtrasado && " (!)"}
+                      </span>
+                    </div>
+                    <span>Total: {brl(enc.total)}</span>
                   </div>
-                  <span className="font-display text-sm font-bold text-foreground">
-                    {brl(enc.total)}
-                  </span>
+                  {enc.valor_entrada > 0 && (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Sinal Pago:</span>
+                      <span className="text-success">{brl(enc.valor_entrada)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between font-display text-sm font-bold text-foreground mt-1 border-t border-border/50 pt-1.5">
+                    <span>Restante:</span>
+                    <span>{brl(enc.total - (enc.valor_entrada || 0))}</span>
+                  </div>
                 </div>
 
                 {/* Actions */}
@@ -294,6 +327,15 @@ export default function EncomendasPage() {
                       disabled={alterarStatusM.isPending}
                     >
                       Avançar <ChevronRight className="h-3 w-3 ml-0.5" />
+                    </Button>
+                  ) : enc.status === "entregue" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 bg-success/10 text-success border-success/20 hover:bg-success/20 hover:text-success"
+                      onClick={() => setPayModal({ open: true, id: enc.id })}
+                    >
+                      Gerar Faturamento
                     </Button>
                   ) : (
                     <div />
@@ -361,6 +403,10 @@ export default function EncomendasPage() {
                 <Input type="number" step={0.01} value={total} onChange={(e) => setTotal(Number(e.target.value))} />
               </div>
               <div>
+                <label className="text-xs font-medium text-muted-foreground">Entrada / Sinal (R$)</label>
+                <Input type="number" step={0.01} value={valorEntrada} onChange={(e) => setValorEntrada(Number(e.target.value))} />
+              </div>
+              <div>
                 <label className="text-xs font-medium text-muted-foreground">Status</label>
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -386,6 +432,36 @@ export default function EncomendasPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* Modal Faturamento */}
+      <Dialog open={payModal.open} onOpenChange={(v) => { if (!v) setPayModal({ open: false, id: null }) }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Faturar Encomenda</DialogTitle>
+            <DialogDescription>Selecione a forma de pagamento do restante para gerar a venda.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Forma de Pagamento</label>
+            <Select value={payForma} onValueChange={setPayForma}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="credito">Cartão de Crédito</SelectItem>
+                <SelectItem value="debito">Cartão de Débito</SelectItem>
+                <SelectItem value="fiado">Fiado (A Prazo)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayModal({ open: false, id: null })}>Cancelar</Button>
+            <Button disabled={faturarM.isPending} onClick={() => {
+              if (payModal.id) faturarM.mutate({ id: payModal.id, forma_pagamento: payForma });
+            }}>Confirmar Pagamento</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

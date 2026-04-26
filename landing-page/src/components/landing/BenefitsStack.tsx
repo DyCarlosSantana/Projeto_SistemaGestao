@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 const BenefitCard = ({ title, description, index }: { title: string, description: string, index: number }) => {
   return (
     <div
-      className="sticky w-full mb-[20vh] last:mb-0"
-      style={{ top: `calc(160px + ${index * 30}px)` }}
+      className="sticky w-full mb-[15vh] last:mb-0"
+      style={{ top: `calc(180px + ${index * 40}px)` }}
     >
       <motion.div
         initial={{ opacity: 0, y: 50 }}

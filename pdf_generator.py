@@ -2,11 +2,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.pdfgen import canvas
 import os
 import datetime
+import base64
+from io import BytesIO
 
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode.qr import QrCodeWidget
@@ -28,6 +30,18 @@ def _crc16(payload):
                 crc = crc << 1
             crc &= 0xFFFF
     return f"{crc:04X}"
+
+def _get_logo_image(config, width=4*cm, height=1.5*cm):
+    logo_data = config.get('logo_path', '')
+    if logo_data and logo_data.startswith('data:image'):
+        try:
+            header, encoded = logo_data.split(",", 1)
+            img_data = base64.b64decode(encoded)
+            img_io = BytesIO(img_data)
+            return Image(img_io, width=width, height=height, kind='proportional')
+        except Exception:
+            return None
+    return None
 
 def gerar_brcode_pix(chave, valor_float, nome="Empresa", cidade="BR"):
     """ Gera payload estático PIX EMVCo """
@@ -113,8 +127,15 @@ def gerar_orcamento_pdf(orcamento, itens, config, logo_path=None):
     story = []
 
     # Header
+    logo_img = _get_logo_image(config)
+    left_cell = []
+    if logo_img:
+        left_cell.append(logo_img)
+        left_cell.append(Spacer(1, 0.2*cm))
+    left_cell.append(Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", title_style))
+
     header_data = [[
-        Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", title_style),
+        left_cell,
         Paragraph(
             f"{config.get('empresa_cnpj','')}<br/>"
             f"{('Tel: ' + config['empresa_telefone']) if config.get('empresa_telefone') else ''}<br/>"
@@ -256,9 +277,15 @@ def gerar_nota_venda_pdf(venda, itens, config):
     story = []
 
     # Header igual ao orçamento
+    logo_img = _get_logo_image(config)
+    left_cell = []
+    if logo_img:
+        left_cell.append(logo_img)
+        left_cell.append(Spacer(1, 0.2*cm))
+    left_cell.append(Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')))
+
     header_data = [[
-        Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>",
-                  ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')),
+        left_cell,
         Paragraph(
             f"{config.get('empresa_cnpj','')}<br/>"
             f"{config.get('empresa_telefone','')}"
@@ -379,9 +406,15 @@ def gerar_pdf_locacao(locacao, itens, config):
     styles = getSampleStyleSheet()
     story = []
 
+    logo_img = _get_logo_image(config)
+    left_cell = []
+    if logo_img:
+        left_cell.append(logo_img)
+        left_cell.append(Spacer(1, 0.2*cm))
+    left_cell.append(Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')))
+
     header_data = [[
-        Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>",
-                  ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')),
+        left_cell,
         Paragraph(f"{config.get('empresa_cnpj','')}<br/>{config.get('empresa_telefone','')}<br/>{config.get('empresa_email','')}",
                   ParagraphStyle('tr', fontSize=8, textColor=GRAY, alignment=TA_RIGHT))
     ]]
@@ -482,9 +515,15 @@ def gerar_relatorio_pdf(data_ini, data_fim, vendas, formas, despesas, total_entr
         rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     story = []
 
+    logo_img = _get_logo_image(config)
+    left_cell = []
+    if logo_img:
+        left_cell.append(logo_img)
+        left_cell.append(Spacer(1, 0.2*cm))
+    left_cell.append(Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')))
+
     header_data = [[
-        Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>",
-                  ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')),
+        left_cell,
         Paragraph(f"{config.get('empresa_telefone','')}<br/>{config.get('empresa_email','')}",
                   ParagraphStyle('tr', fontSize=8, textColor=GRAY, alignment=TA_RIGHT))
     ]]
@@ -587,9 +626,15 @@ def gerar_pdf_encomenda(enc, config):
     story = []
 
     # Header
+    logo_img = _get_logo_image(config)
+    left_cell = []
+    if logo_img:
+        left_cell.append(logo_img)
+        left_cell.append(Spacer(1, 0.2*cm))
+    left_cell.append(Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>", ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')))
+
     hd = [[
-        Paragraph(f"<b>{config.get('empresa_nome','DripArt')}</b>",
-                  ParagraphStyle('th', fontSize=20, textColor=PURPLE, fontName='Helvetica-Bold')),
+        left_cell,
         Paragraph(
             f"{config.get('empresa_cnpj','')}<br/>"
             f"{config.get('empresa_telefone','')}"

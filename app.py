@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template, make_response, send_from_directory
+from flask import Flask, request, jsonify, send_file, render_template, make_response
 from database import get_db, init_db
 from auth import require_auth, require_admin, gerar_token, get_current_user, get_empresa_id
 import datetime, os, json
@@ -12,11 +12,10 @@ except ImportError:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
-# Diretórios dos dois projetos frontend
-LANDING_DIR = os.path.join(BASE_DIR, 'landing-page', 'dist')
-APP_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
+STATIC_DIR = os.path.join(BASE_DIR, 'decor-venue-flow-main', 'dist')
 
-print(f"Pasta Base: {BASE_DIR}")
+print(f"Pasta: {BASE_DIR}")
 
 try:
     from pdf_generator import gerar_orcamento_pdf, gerar_nota_venda_pdf, gerar_pdf_locacao, gerar_relatorio_pdf, gerar_pdf_encomenda
@@ -25,7 +24,7 @@ except ImportError:
     PDF_OK = False
     print("AVISO: reportlab nao encontrado. PDFs desabilitados.")
 
-app = Flask(__name__, template_folder=APP_DIR, static_folder=APP_DIR, static_url_path='/_static_hidden')
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR, static_url_path='/_static_hidden')
 
 # CORS manual - permite acesso do navegador local
 @app.after_request
@@ -332,7 +331,7 @@ def criar_usuario():
     d = request.get_json(force=True, silent=True) or {}
     senha = d.get('senha', '')
     senha_hash = generate_password_hash(senha) if senha else generate_password_hash('123456')
-    cargo_id = d.get('cargo_id')
+    cargo_id = d.get('cargo_id') or None
     
     db = get_db()
     try:
@@ -356,7 +355,7 @@ def atualizar_usuario(id):
     eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    cargo_id = d.get('cargo_id')
+    cargo_id = d.get('cargo_id') or None
     
     if d.get('senha'):
         senha_hash = generate_password_hash(d['senha'])
@@ -651,21 +650,21 @@ def alterar_minha_senha():
 def dashboard():
     eid = get_empresa_id()
     db = get_db()
-    hoje = datetime.date.today().isoformat()
-    amanha = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+    hoje = (datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date().isoformat()
+    amanha = (datetime.datetime.utcnow() - datetime.timedelta(hours=3) + datetime.timedelta(days=1)).date().isoformat()
     mes_atual = hoje[:7]
     mes_inicio = mes_atual + "-01"
-    prox_mes = (datetime.date.today().replace(day=28) + datetime.timedelta(days=4)).replace(day=1).isoformat()
-    tres_dias = (datetime.date.today() + datetime.timedelta(days=3)).isoformat()
-    sete_dias = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+    prox_mes = ((datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date().replace(day=28) + datetime.timedelta(days=4)).replace(day=1).isoformat()
+    tres_dias = ((datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date() + datetime.timedelta(days=3)).isoformat()
+    sete_dias = ((datetime.datetime.utcnow() - datetime.timedelta(hours=3)).date() + datetime.timedelta(days=7)).isoformat()
 
     receita_mes = db.execute(
-        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago') AND empresa_id=?",
+        "SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago' OR status='fiado') AND empresa_id=?",
         (mes_inicio, prox_mes, eid)
     ).fetchone()['v']
 
     vendas_hoje = db.execute(
-        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago') AND empresa_id=?",
+        "SELECT COUNT(*) as c, COALESCE(SUM(total),0) as v FROM vendas WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago' OR status='fiado') AND empresa_id=?",
         (hoje, amanha, eid)
     ).fetchone()
 
@@ -685,7 +684,7 @@ def dashboard():
     receita_categorias = db.execute("""
         SELECT tipo, COALESCE(SUM(total),0) as total
         FROM vendas
-        WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago') AND empresa_id=?
+        WHERE criado_em >= ? AND criado_em < ? AND (status='pago' OR status='Pago' OR status='fiado') AND empresa_id=?
         GROUP BY tipo
     """, (mes_inicio, prox_mes, eid)).fetchall()
 
@@ -1112,7 +1111,7 @@ def criar_venda():
         )
         if item.get('produto_id'):
             db.execute(
-                "UPDATE produtos SET estoque = MAX(0, estoque - ?) WHERE id=? AND empresa_id=?",
+                "UPDATE produtos SET estoque = GREATEST(0, estoque - ?) WHERE id=? AND empresa_id=?",
                 (int(item['quantidade']), item['produto_id'], eid)
             )
     db.commit()
@@ -1266,7 +1265,7 @@ def atualizar_evento(id):
          d.get('status','pendente'), d.get('cor','#534AB7'), id, eid)
     )
     db.commit()
-    row = row_to_dict(db.execute("SELECT * FROM agenda WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
+    row = row_to_dict(db.execute("SELECT * FROM agenda WHERE id=?", (id,)).fetchone())
     db.close()
     return jsonify(row)
 
@@ -1319,11 +1318,11 @@ def criar_locacao():
     db = get_db()
     eid = get_empresa_id()
     cur = db.execute(
-        "INSERT INTO locacoes (empresa_id, cliente_id, cliente_nome, tipo, data_retirada, data_devolucao, total, desconto, forma_pagamento, status, obs) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO locacoes (empresa_id, cliente_id, cliente_nome, tipo, data_retirada, data_devolucao, total, desconto, forma_pagamento, status, obs, valor_entrada) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (eid, d.get('cliente_id'), d.get('cliente_nome',''), d.get('tipo','item'),
          d.get('data_retirada',''), d.get('data_devolucao',''),
          d.get('total', 0), d.get('desconto',0), d.get('forma_pagamento',''),
-         d.get('status','ativo'), d.get('obs',''))
+         d.get('status','ativo'), d.get('obs',''), d.get('valor_entrada', 0))
     )
     loc_id = cur.lastrowid
     for item in d.get('itens', []):
@@ -1346,18 +1345,19 @@ def criar_locacao():
 @app.route('/api/locacoes/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_locacao(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE locacoes SET cliente_nome=?, data_retirada=?, data_devolucao=?, total=?, desconto=?, forma_pagamento=?, obs=? WHERE id=?",
+        "UPDATE locacoes SET cliente_nome=?, data_retirada=?, data_devolucao=?, total=?, desconto=?, forma_pagamento=?, obs=?, valor_entrada=? WHERE id=? AND empresa_id=?",
         (d.get('cliente_nome',''), d.get('data_retirada',''), d.get('data_devolucao',''),
-         d.get('total', 0), d.get('desconto',0), d.get('forma_pagamento',''), d.get('obs',''), id)
+         d.get('total', 0), d.get('desconto',0), d.get('forma_pagamento',''), d.get('obs',''), d.get('valor_entrada', 0), id, eid)
     )
     db.execute("DELETE FROM locacao_itens WHERE locacao_id=?", (id,))
     for item in d.get('itens', []):
         db.execute(
-            "INSERT INTO locacao_itens (locacao_id, item_id, kit_id, nome, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?,?)",
-            (id, item.get('item_id'), item.get('kit_id'), item['nome'],
+            "INSERT INTO locacao_itens (empresa_id, locacao_id, item_id, kit_id, nome, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?,?,?)",
+            (eid, id, item.get('item_id'), item.get('kit_id'), item['nome'],
              item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
     db.commit()
@@ -1382,11 +1382,12 @@ def deletar_locacao(id):
 def pdf_locacao(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado'}), 503
+    eid = get_empresa_id()
     db = get_db()
-    loc = row_to_dict(db.execute("SELECT * FROM locacoes WHERE id=?", (id,)).fetchone())
+    loc = row_to_dict(db.execute("SELECT * FROM locacoes WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     itens = rows_to_list(db.execute("SELECT * FROM locacao_itens WHERE locacao_id=?", (id,)).fetchall())
     db.close()
-    config = get_config()
+    config = get_config(eid)
     path = gerar_pdf_locacao(loc, itens, config)
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
@@ -1404,30 +1405,31 @@ def atualizar_status_locacao(id):
 @app.route('/api/locacoes/<int:id>/converter', methods=['POST'])
 @require_auth
 def converter_locacao_venda(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     forma = d.get('forma_pagamento', 'dinheiro')
     db = get_db()
-    
-    loc = row_to_dict(db.execute("SELECT * FROM locacoes WHERE id=?", (id,)).fetchone())
+    loc = row_to_dict(db.execute("SELECT * FROM locacoes WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     if not loc:
         db.close()
         return jsonify({'erro': 'Locacao nao encontrada'}), 404
-        
     itens = rows_to_list(db.execute("SELECT * FROM locacao_itens WHERE locacao_id=?", (id,)).fetchall())
+    status = 'fiado' if forma == 'fiado' else 'pago'
+    venc = (datetime.date.today() + datetime.timedelta(days=30)).isoformat() if forma == 'fiado' else None
+    
+    total_faturar = loc.get('total', 0) - loc.get('valor_entrada', 0)
     
     cur = db.execute(
-        "INSERT INTO vendas (cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status) VALUES (?,?,?,?,?,?,?)",
-        (loc.get('cliente_nome',''), 'locacao', loc.get('total',0), loc.get('desconto',0), loc.get('total',0), forma, 'pago')
+        "INSERT INTO vendas (empresa_id, cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (eid, loc.get('cliente_id'), loc.get('cliente_nome',''), 'locacao', loc.get('total',0), loc.get('desconto',0), total_faturar, forma, status, venc)
     )
     venda_id = cur.lastrowid
-    
     for item in itens:
         db.execute(
-            "INSERT INTO venda_itens (venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (venda_id, f"[Locação #{id}] " + item['nome'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO venda_itens (empresa_id, venda_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, venda_id, f"[Locação #{id}] " + item['nome'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
-        
-    db.execute("UPDATE locacoes SET status='faturado' WHERE id=?", (id,))
+    db.execute("UPDATE locacoes SET status='faturado' WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True, 'venda_id': venda_id})
@@ -1471,7 +1473,7 @@ def atualizar_item_locacao(id):
         (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('preco_diaria', 0), d.get('quantidade_total',1), id, eid)
     )
     db.commit()
-    row = db.execute("SELECT * FROM itens_locacao WHERE id=? AND empresa_id=?", (id, eid)).fetchone()
+    row = db.execute("SELECT * FROM itens_locacao WHERE id=?", (id,)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
 
@@ -1534,7 +1536,7 @@ def atualizar_kit(id):
         db.execute("INSERT INTO kit_itens (empresa_id, kit_id, item_id, quantidade) VALUES (?,?,?,?)",
                    (eid, id, item['item_id'], item.get('quantidade',1)))
     db.commit()
-    row = db.execute("SELECT * FROM kits_locacao WHERE id=? AND empresa_id=?", (id, eid)).fetchone()
+    row = db.execute("SELECT * FROM kits_locacao WHERE id=?", (id,)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
 
@@ -1555,32 +1557,33 @@ def deletar_kit(id):
 @app.route('/api/orcamentos', methods=['GET'])
 @require_auth
 def listar_orcamentos():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM orcamentos ORDER BY criado_em DESC LIMIT 100").fetchall()
+    rows = db.execute("SELECT * FROM orcamentos WHERE empresa_id=? ORDER BY criado_em DESC LIMIT 100", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/orcamentos', methods=['POST'])
 @require_auth
 def criar_orcamento():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    numero = proximo_numero_orcamento()
-    config = get_config()
+    numero = proximo_numero_orcamento(eid)
+    config = get_config(eid)
     dias = int(config.get('orcamento_validade_dias', 7))
     validade = (datetime.date.today() + datetime.timedelta(days=dias)).isoformat()
-
     cur = db.execute(
-        "INSERT INTO orcamentos (numero, cliente_id, cliente_nome, validade, subtotal, desconto, total, status, obs) VALUES (?,?,?,?,?,?,?,?,?)",
-        (numero, d.get('cliente_id'), d.get('cliente_nome',''),
+        "INSERT INTO orcamentos (empresa_id, numero, cliente_id, cliente_nome, validade, subtotal, desconto, total, status, obs, valor_entrada) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (eid, numero, d.get('cliente_id'), d.get('cliente_nome',''),
          validade, d.get('subtotal', 0), d.get('desconto',0), d.get('total', 0),
-         'aberto', d.get('obs',''))
+         'aberto', d.get('obs',''), d.get('valor_entrada', 0))
     )
     orc_id = cur.lastrowid
     for item in d.get('itens', []):
         db.execute(
-            "INSERT INTO orcamento_itens (orcamento_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (orc_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO orcamento_itens (empresa_id, orcamento_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, orc_id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
     db.commit()
     row = db.execute("SELECT * FROM orcamentos WHERE id=?", (orc_id,)).fetchone()
@@ -1590,17 +1593,18 @@ def criar_orcamento():
 @app.route('/api/orcamentos/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_orcamento(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE orcamentos SET cliente_nome=?, subtotal=?, desconto=?, total=?, obs=? WHERE id=?",
-        (d.get('cliente_nome',''), d.get('subtotal', 0), d.get('desconto',0), d.get('total', 0), d.get('obs',''), id)
+        "UPDATE orcamentos SET cliente_nome=?, subtotal=?, desconto=?, total=?, obs=?, valor_entrada=? WHERE id=? AND empresa_id=?",
+        (d.get('cliente_nome',''), d.get('subtotal', 0), d.get('desconto',0), d.get('total', 0), d.get('obs',''), d.get('valor_entrada', 0), id, eid)
     )
     db.execute("DELETE FROM orcamento_itens WHERE orcamento_id=?", (id,))
     for item in d.get('itens', []):
         db.execute(
-            "INSERT INTO orcamento_itens (orcamento_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?)",
-            (id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
+            "INSERT INTO orcamento_itens (empresa_id, orcamento_id, descricao, quantidade, preco_unitario, subtotal) VALUES (?,?,?,?,?,?)",
+            (eid, id, item['descricao'], item['quantidade'], item['preco_unitario'], item['subtotal'])
         )
     db.commit()
     row = db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone()
@@ -1611,9 +1615,10 @@ def atualizar_orcamento(id):
 @require_auth
 @require_admin
 def deletar_orcamento(id):
+    eid = get_empresa_id()
     db = get_db()
     db.execute("DELETE FROM orcamento_itens WHERE orcamento_id=?", (id,))
-    db.execute("DELETE FROM orcamentos WHERE id=?", (id,))
+    db.execute("DELETE FROM orcamentos WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1642,11 +1647,12 @@ def atualizar_status_orcamento(id):
 def pdf_orcamento(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado. Rode: pip install reportlab'}), 503
+    eid = get_empresa_id()
     db = get_db()
-    orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=?", (id,)).fetchone())
+    orc = row_to_dict(db.execute("SELECT * FROM orcamentos WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
     db.close()
-    config = get_config()
+    config = get_config(eid)
     path = gerar_orcamento_pdf(orc, itens, config)
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
@@ -1656,31 +1662,32 @@ def pdf_orcamento(id):
 @require_auth
 def relatorio_resumo():
     db = get_db()
+    eid = get_empresa_id()
     data_ini = request.args.get('data_ini', datetime.date.today().replace(day=1).isoformat())
     data_fim = request.args.get('data_fim', datetime.date.today().isoformat())
 
     vendas = db.execute("""
         SELECT tipo, COUNT(*) as qtd, SUM(total) as total
-        FROM vendas WHERE date(criado_em) BETWEEN ? AND ?
+        FROM vendas WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ?
         GROUP BY tipo
-    """, (data_ini, data_fim)).fetchall()
+    """, (eid, data_ini, data_fim)).fetchall()
 
     formas_pag = db.execute("""
         SELECT forma_pagamento, COUNT(*) as qtd, SUM(total) as total
-        FROM vendas WHERE date(criado_em) BETWEEN ? AND ? AND status='pago'
+        FROM vendas WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ? AND status='pago'
         GROUP BY forma_pagamento
-    """, (data_ini, data_fim)).fetchall()
+    """, (eid, data_ini, data_fim)).fetchall()
 
     locacoes = db.execute("""
         SELECT status, COUNT(*) as qtd, SUM(total) as total
-        FROM locacoes WHERE date(criado_em) BETWEEN ? AND ?
+        FROM locacoes WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ?
         GROUP BY status
-    """, (data_ini, data_fim)).fetchall()
+    """, (eid, data_ini, data_fim)).fetchall()
 
     total_geral = db.execute("""
         SELECT COALESCE(SUM(total),0) as v FROM vendas
-        WHERE date(criado_em) BETWEEN ? AND ? AND status='pago'
-    """, (data_ini, data_fim)).fetchone()['v']
+        WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ? AND status='pago'
+    """, (eid, data_ini, data_fim)).fetchone()['v']
 
     db.close()
     return jsonify({
@@ -1700,24 +1707,26 @@ def relatorio_resumo():
 @app.route('/api/despesas', methods=['GET'])
 @require_auth
 def listar_despesas():
+    eid = get_empresa_id()
     db = get_db()
     data_ini = request.args.get('data_ini', '')
     data_fim = request.args.get('data_fim', '')
     if data_ini and data_fim:
-        rows = db.execute("SELECT * FROM despesas WHERE data BETWEEN ? AND ? ORDER BY data DESC", (data_ini, data_fim)).fetchall()
+        rows = db.execute("SELECT * FROM despesas WHERE empresa_id=? AND data BETWEEN ? AND ? ORDER BY data DESC", (eid, data_ini, data_fim)).fetchall()
     else:
-        rows = db.execute("SELECT * FROM despesas ORDER BY criado_em DESC LIMIT 100").fetchall()
+        rows = db.execute("SELECT * FROM despesas WHERE empresa_id=? ORDER BY criado_em DESC LIMIT 100", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/despesas', methods=['POST'])
 @require_auth
 def criar_despesa():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO despesas (descricao, categoria, valor, forma_pagamento, data, obs) VALUES (?,?,?,?,?,?)",
-        (d.get('descricao',''), d.get('categoria','geral'), d.get('valor', 0),
+        "INSERT INTO despesas (empresa_id, descricao, categoria, valor, forma_pagamento, data, obs) VALUES (?,?,?,?,?,?,?)",
+        (eid, d.get('descricao',''), d.get('categoria','geral'), d.get('valor', 0),
          d.get('forma_pagamento','dinheiro'), d.get('data', datetime.date.today().isoformat()), d.get('obs',''))
     )
     db.commit()
@@ -1728,12 +1737,13 @@ def criar_despesa():
 @app.route('/api/despesas/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_despesa(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE despesas SET descricao=?, categoria=?, valor=?, forma_pagamento=?, data=?, obs=? WHERE id=?",
+        "UPDATE despesas SET descricao=?, categoria=?, valor=?, forma_pagamento=?, data=?, obs=? WHERE id=? AND empresa_id=?",
         (d.get('descricao',''), d.get('categoria','geral'), d.get('valor', 0),
-         d.get('forma_pagamento','dinheiro'), d.get('data',''), d.get('obs',''), id)
+         d.get('forma_pagamento','dinheiro'), d.get('data',''), d.get('obs',''), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM despesas WHERE id=?", (id,)).fetchone()
@@ -1743,8 +1753,9 @@ def atualizar_despesa(id):
 @app.route('/api/despesas/<int:id>', methods=['DELETE'])
 @require_auth
 def deletar_despesa(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("DELETE FROM despesas WHERE id=?", (id,))
+    db.execute("DELETE FROM despesas WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1777,37 +1788,24 @@ def fluxo_caixa():
 
 # ─── ENCOMENDAS ───────────────────────────────────────────────────────────────
 
-def proximo_numero_encomenda():
-    db = get_db()
-    row = db.execute("SELECT COUNT(*) as c FROM encomendas").fetchone()
-    n = (row['c'] or 0) + 1
-    db.close()
-    return f"ENC-{n:04d}"
-
 @app.route('/api/encomendas', methods=['GET'])
 @require_auth
 def listar_encomendas():
+    eid = get_empresa_id()
     db = get_db()
     status = request.args.get('status', '')
     q = request.args.get('q', '')
-    
-    where = []
-    params = []
+    where, params = ["empresa_id=?"], [eid]
     if status and status != 'todas':
         where.append("status=?")
         params.append(status)
     elif not status:
         where.append("status != 'entregue'")
-        
     if q:
         where.append("cliente_nome LIKE ?")
         params.append(f'%{q}%')
-        
-    sql = "SELECT * FROM encomendas"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
+    sql = "SELECT * FROM encomendas WHERE " + " AND ".join(where)
     sql += " ORDER BY data_entrega ASC, criado_em DESC LIMIT 200"
-    
     rows = db.execute(sql, params).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
@@ -1815,28 +1813,30 @@ def listar_encomendas():
 @app.route('/api/encomendas/todas', methods=['GET'])
 @require_auth
 def todas_encomendas():
+    eid = get_empresa_id()
     db = get_db()
-    rows = db.execute("SELECT * FROM encomendas ORDER BY criado_em DESC LIMIT 100").fetchall()
+    rows = db.execute("SELECT * FROM encomendas WHERE empresa_id=? ORDER BY criado_em DESC LIMIT 100", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/encomendas', methods=['POST'])
 @require_auth
 def criar_encomenda():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    numero = proximo_numero_encomenda()
+    row_c = db.execute("SELECT COUNT(*) as c FROM encomendas WHERE empresa_id=?", (eid,)).fetchone()
+    numero = f"ENC-{(row_c['c'] or 0) + 1:04d}"
     cur = db.execute(
-        "INSERT INTO encomendas (numero, cliente_id, cliente_nome, descricao, status, data_pedido, data_entrega, total, sinal, obs) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (numero, d.get('cliente_id'), d.get('cliente_nome',''), d.get('descricao',''),
+        "INSERT INTO encomendas (empresa_id, numero, cliente_id, cliente_nome, descricao, status, data_pedido, data_entrega, total, sinal, obs, valor_entrada) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (eid, numero, d.get('cliente_id'), d.get('cliente_nome',''), d.get('descricao',''),
          d.get('status','pedido'), d.get('data_pedido', datetime.date.today().isoformat()),
-         d.get('data_entrega',''), d.get('total',0), d.get('sinal',0), d.get('obs',''))
+         d.get('data_entrega',''), d.get('total',0), d.get('valor_entrada', 0), d.get('obs',''), d.get('valor_entrada', 0))
     )
-    # Sincroniza com agenda se tiver data de entrega
     if d.get('data_entrega'):
         db.execute(
-            "INSERT INTO agenda (titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (f"Entrega: {d.get('cliente_nome','')}", 'encomenda', d.get('data_entrega',''), d.get('data_entrega',''),
+            "INSERT INTO agenda (empresa_id, titulo, tipo, data_inicio, data_fim, hora_inicio, hora_fim, cliente_nome, descricao, status, encomenda_id, cor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (eid, f"Entrega: {d.get('cliente_nome','')}", 'encomenda', d.get('data_entrega',''), d.get('data_entrega',''),
              '08:00', '18:00', d.get('cliente_nome',''), d.get('descricao','')[:60], 'pendente', cur.lastrowid, '#534AB7')
         )
     db.commit()
@@ -1844,13 +1844,13 @@ def criar_encomenda():
     db.close()
     return jsonify(row_to_dict(row)), 201
 
-
 @app.route('/api/encomendas/<int:id>/status', methods=['PUT'])
 @require_auth
 def atualizar_status_encomenda(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
-    db.execute("UPDATE encomendas SET status=? WHERE id=?", (d.get('status',''), id))
+    db.execute("UPDATE encomendas SET status=? WHERE id=? AND empresa_id=?", (d.get('status',''), id, eid))
     db.commit()
     row = db.execute("SELECT * FROM encomendas WHERE id=?", (id,)).fetchone()
     db.close()
@@ -1859,26 +1859,27 @@ def atualizar_status_encomenda(id):
 @app.route('/api/encomendas/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_encomenda(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE encomendas SET cliente_nome=?, descricao=?, status=?, data_entrega=?, total=?, sinal=?, obs=? WHERE id=?",
+        "UPDATE encomendas SET cliente_nome=?, descricao=?, status=?, data_entrega=?, total=?, sinal=?, obs=?, valor_entrada=? WHERE id=? AND empresa_id=?",
         (d.get('cliente_nome',''), d.get('descricao',''), d.get('status','pedido'),
-         d.get('data_entrega',''), d.get('total',0), d.get('sinal',0), d.get('obs',''), id)
+         d.get('data_entrega',''), d.get('total',0), d.get('valor_entrada', 0), d.get('obs',''), d.get('valor_entrada', 0), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM encomendas WHERE id=?", (id,)).fetchone()
     db.close()
     return jsonify(row_to_dict(row))
 
-
 @app.route('/api/encomendas/<int:id>', methods=['DELETE'])
 @require_auth
 @require_admin
 def deletar_encomenda(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("DELETE FROM agenda WHERE encomenda_id=?", (id,))
-    db.execute("DELETE FROM encomendas WHERE id=?", (id,))
+    db.execute("DELETE FROM agenda WHERE encomenda_id=? AND empresa_id=?", (id, eid))
+    db.execute("DELETE FROM encomendas WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1888,23 +1889,25 @@ def deletar_encomenda(id):
 @app.route('/api/servicos', methods=['GET'])
 @require_auth
 def listar_servicos():
+    eid = get_empresa_id()
     db = get_db()
     q = request.args.get('q', '')
     if q:
-        rows = db.execute("SELECT * FROM servicos WHERE ativo=1 AND nome LIKE ? ORDER BY nome", (f'%{q}%',)).fetchall()
+        rows = db.execute("SELECT * FROM servicos WHERE ativo=1 AND empresa_id=? AND nome LIKE ? ORDER BY nome", (eid, f'%{q}%')).fetchall()
     else:
-        rows = db.execute("SELECT * FROM servicos WHERE ativo=1 ORDER BY nome").fetchall()
+        rows = db.execute("SELECT * FROM servicos WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)).fetchall()
     db.close()
     return jsonify(rows_to_list(rows))
 
 @app.route('/api/servicos', methods=['POST'])
 @require_auth
 def criar_servico():
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     cur = db.execute(
-        "INSERT INTO servicos (nome, descricao, categoria, tipo_preco, preco) VALUES (?,?,?,?,?)",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0))
+        "INSERT INTO servicos (empresa_id, nome, descricao, categoria, tipo_preco, preco) VALUES (?,?,?,?,?,?)",
+        (eid, d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0))
     )
     db.commit()
     row = db.execute("SELECT * FROM servicos WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1914,11 +1917,12 @@ def criar_servico():
 @app.route('/api/servicos/<int:id>', methods=['PUT'])
 @require_auth
 def atualizar_servico(id):
+    eid = get_empresa_id()
     d = request.get_json(force=True, silent=True) or {}
     db = get_db()
     db.execute(
-        "UPDATE servicos SET nome=?, descricao=?, categoria=?, tipo_preco=?, preco=? WHERE id=?",
-        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0), id)
+        "UPDATE servicos SET nome=?, descricao=?, categoria=?, tipo_preco=?, preco=? WHERE id=? AND empresa_id=?",
+        (d.get('nome',''), d.get('descricao',''), d.get('categoria',''), d.get('tipo_preco','fixo'), d.get('preco', 0), id, eid)
     )
     db.commit()
     row = db.execute("SELECT * FROM servicos WHERE id=?", (id,)).fetchone()
@@ -1929,8 +1933,9 @@ def atualizar_servico(id):
 @require_auth
 @require_admin
 def deletar_servico(id):
+    eid = get_empresa_id()
     db = get_db()
-    db.execute("UPDATE servicos SET ativo=0 WHERE id=?", (id,))
+    db.execute("UPDATE servicos SET ativo=0 WHERE id=? AND empresa_id=?", (id, eid))
     db.commit()
     db.close()
     return jsonify({'ok': True})
@@ -1943,19 +1948,20 @@ def exportar_relatorio():
     data_ini = request.args.get('data_ini', datetime.date.today().replace(day=1).isoformat())
     data_fim = request.args.get('data_fim', datetime.date.today().isoformat())
     db = get_db()
+    eid = get_empresa_id()
     vendas = rows_to_list(db.execute(
-        "SELECT tipo, COUNT(*) as qtd, SUM(total) as total FROM vendas WHERE date(criado_em) BETWEEN ? AND ? GROUP BY tipo",
-        (data_ini, data_fim)).fetchall())
+        "SELECT tipo, COUNT(*) as qtd, SUM(total) as total FROM vendas WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ? GROUP BY tipo",
+        (eid, data_ini, data_fim)).fetchall())
     formas = rows_to_list(db.execute(
-        "SELECT forma_pagamento, COUNT(*) as qtd, SUM(total) as total FROM vendas WHERE date(criado_em) BETWEEN ? AND ? AND status='pago' GROUP BY forma_pagamento",
-        (data_ini, data_fim)).fetchall())
+        "SELECT forma_pagamento, COUNT(*) as qtd, SUM(total) as total FROM vendas WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ? AND status='pago' GROUP BY forma_pagamento",
+        (eid, data_ini, data_fim)).fetchall())
     despesas = rows_to_list(db.execute(
-        "SELECT categoria, COUNT(*) as qtd, SUM(valor) as total FROM despesas WHERE data BETWEEN ? AND ? GROUP BY categoria",
-        (data_ini, data_fim)).fetchall())
-    total_entrada = db.execute("SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE date(criado_em) BETWEEN ? AND ? AND status='pago'", (data_ini, data_fim)).fetchone()['v']
-    total_saida = db.execute("SELECT COALESCE(SUM(valor),0) as v FROM despesas WHERE data BETWEEN ? AND ?", (data_ini, data_fim)).fetchone()['v']
+        "SELECT categoria, COUNT(*) as qtd, SUM(valor) as total FROM despesas WHERE empresa_id=? AND data BETWEEN ? AND ? GROUP BY categoria",
+        (eid, data_ini, data_fim)).fetchall())
+    total_entrada = db.execute("SELECT COALESCE(SUM(total),0) as v FROM vendas WHERE empresa_id=? AND date(criado_em) BETWEEN ? AND ? AND status='pago'", (eid, data_ini, data_fim)).fetchone()['v']
+    total_saida = db.execute("SELECT COALESCE(SUM(valor),0) as v FROM despesas WHERE empresa_id=? AND data BETWEEN ? AND ?", (eid, data_ini, data_fim)).fetchone()['v']
     db.close()
-    config = get_config()
+    config = get_config(eid)
     path = gerar_relatorio_pdf(data_ini, data_fim, vendas, formas, despesas, total_entrada, total_saida, config)
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
@@ -1972,12 +1978,18 @@ def converter_orcamento_venda(id):
         return jsonify({'erro': 'Orçamento não encontrado'}), 404
     itens = rows_to_list(db.execute("SELECT * FROM orcamento_itens WHERE orcamento_id=?", (id,)).fetchall())
     d = request.get_json(force=True, silent=True) or {} or {}
+    forma = d.get('forma_pagamento', 'dinheiro')
+    status = 'fiado' if forma == 'fiado' else 'pago'
+    venc = (datetime.date.today() + datetime.timedelta(days=30)).isoformat() if forma == 'fiado' else None
+    
+    total_faturar = orc['total'] - orc.get('valor_entrada', 0)
+    
     cur = db.execute(
-        "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs) VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (orc.get('cliente_id'), orc.get('cliente_nome',''), 'orcamento',
-         orc['subtotal'], orc.get('desconto',0), orc['total'],
-         d.get('forma_pagamento','dinheiro'), 'pago',
-         f"Gerado do orçamento {orc['numero']}")
+         orc['subtotal'], orc.get('desconto',0), total_faturar,
+         forma, status,
+         f"Gerado do orçamento {orc['numero']}. Entrada paga: {orc.get('valor_entrada', 0)}", venc)
     )
     venda_id = cur.lastrowid
     for item in itens:
@@ -2002,12 +2014,18 @@ def converter_encomenda_venda(id):
         db.close()
         return jsonify({'erro': 'Encomenda não encontrada'}), 404
     d = request.get_json(force=True, silent=True) or {} or {}
+    forma = d.get('forma_pagamento', 'dinheiro')
+    status = 'fiado' if forma == 'fiado' else 'pago'
+    venc = (datetime.date.today() + datetime.timedelta(days=30)).isoformat() if forma == 'fiado' else None
+    
+    total_faturar = enc.get('total', 0) - enc.get('valor_entrada', 0)
+    
     cur = db.execute(
-        "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs) VALUES (?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO vendas (cliente_id, cliente_nome, tipo, subtotal, desconto, total, forma_pagamento, status, obs, data_vencimento) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (enc.get('cliente_id'), enc.get('cliente_nome',''), 'encomenda',
-         enc.get('total',0), 0, enc.get('total',0),
-         d.get('forma_pagamento','dinheiro'), 'pago',
-         f"Gerado da encomenda {enc['numero']}: {enc['descricao'][:60]}")
+         enc.get('total',0), 0, total_faturar,
+         forma, status,
+         f"Gerado da encomenda {enc['numero']}: {enc['descricao'][:60]}. Entrada paga: {enc.get('valor_entrada', 0)}", venc)
     )
     venda_id = cur.lastrowid
     db.execute(
@@ -2209,16 +2227,18 @@ def receber_fiado(id):
 # ─── PDF ENCOMENDA ────────────────────────────────────────────────────────────
 
 @app.route('/api/encomendas/<int:id>/pdf')
+@require_auth
 def pdf_encomenda(id):
     if not PDF_OK:
         return jsonify({'erro': 'reportlab nao instalado'}), 503
+    eid = get_empresa_id()
     db = get_db()
-    enc = row_to_dict(db.execute("SELECT * FROM encomendas WHERE id=?", (id,)).fetchone())
+    enc = row_to_dict(db.execute("SELECT * FROM encomendas WHERE id=? AND empresa_id=?", (id, eid)).fetchone())
     if not enc:
         db.close()
         return jsonify({'erro': 'Encomenda nao encontrada'}), 404
     db.close()
-    config = get_config()
+    config = get_config(eid)
     path = gerar_pdf_encomenda(enc, config)
     return send_file(path, as_attachment=True, download_name=os.path.basename(path))
 
@@ -2393,42 +2413,19 @@ def converter_orcamento_locacao(id):
 @app.route('/<path:path>')
 def serve_react(path):
     if path.startswith('api/'):
+        from flask import jsonify
         return jsonify({'erro': 'Endpoint não encontrado'}), 404
     
-    # 1. Tenta servir como arquivo estático da Landing Page
-    landing_file = os.path.join(LANDING_DIR, path)
-    if path and os.path.exists(landing_file) and not os.path.isdir(landing_file):
-        return send_from_directory(LANDING_DIR, path)
+    # Serve static assets manually
+    if path and os.path.exists(os.path.join(app.static_folder, path)):
+        from flask import send_from_directory
+        return send_from_directory(app.static_folder, path)
         
-    # 2. Tenta servir como arquivo estático do App
-    app_file = os.path.join(APP_DIR, path)
-    if path and os.path.exists(app_file) and not os.path.isdir(app_file):
-        return send_from_directory(APP_DIR, path)
-        
-    # 3. Lógica de Roteamento (SPA)
-    # Lista de rotas que pertencem ao sistema de gestão (App)
-    app_routes = [
-        'login', 'dashboard', 'pdv', 'locacoes', 'orcamentos', 
-        'relatorios', 'clientes', 'produtos', 'itens-locacao', 
-        'calculadora', 'despesas', 'fluxo', 'fiado', 'agenda', 
-        'encomendas', 'servicos', 'configuracoes'
-    ]
-    
-    first_segment = path.split('/')[0] if path else ''
-    
-    # Se a rota for do App, serve o index do App
-    if first_segment in app_routes:
-        index_app = os.path.join(APP_DIR, 'index.html')
-        if os.path.exists(index_app):
-            return send_file(index_app)
-        return "Frontend do Sistema não encontrado. Execute 'npm run build' no diretório do sistema.", 404
-
-    # Por padrão, serve a Landing Page
-    index_landing = os.path.join(LANDING_DIR, 'index.html')
-    if os.path.exists(index_landing):
-        return send_file(index_landing)
-        
-    return "Landing Page não encontrada. Execute 'npm run build' no diretório da landing page.", 404
+    index_path = os.path.join(TEMPLATE_DIR, 'index.html')
+    if os.path.exists(index_path):
+        from flask import send_file
+        return send_file(index_path)
+    return "Aguarde, gerando Frontend...", 404
 
 
 if __name__ == '__main__':

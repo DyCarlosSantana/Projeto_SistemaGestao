@@ -82,6 +82,11 @@ export default function PDVPage() {
     queryFn: () => api.vendas({ data_ini: ini, data_fim: fim }),
   });
 
+  const formasQ = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: api.formasPagamento,
+  });
+
   const excluirM = useMutation({
     mutationFn: (id: number) => api.excluirVenda(id),
     onSuccess: async () => {
@@ -333,9 +338,8 @@ export default function PDVPage() {
                       <Button
                         size="sm"
                         onClick={() => {
-                          const forma = prompt("Forma de pagamento para quitar (dinheiro / pix / cartao_debito / cartao_credito):", "dinheiro");
-                          if (!forma) return;
-                          receberFiadoM.mutate({ id: v.id, forma_pagamento: forma });
+                          setPayForma("dinheiro");
+                          setPayModal({ open: true, id: v.id });
                         }}
                         disabled={receberFiadoM.isPending}
                       >
@@ -399,11 +403,9 @@ export default function PDVPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão crédito</SelectItem>
-                  <SelectItem value="fiado">Fiado / prazo</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -566,10 +568,9 @@ export default function PDVPage() {
               <Select value={payForma} onValueChange={setPayForma}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

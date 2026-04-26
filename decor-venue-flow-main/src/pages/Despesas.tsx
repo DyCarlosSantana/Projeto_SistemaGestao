@@ -30,16 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const catLabels: Record<string, string> = {
-  material: "Material",
-  fornecedor: "Fornecedor",
-  aluguel: "Aluguel",
-  servico_terceiro: "Serv. terceiro",
-  equipamento: "Equipamento",
-  transporte: "Transporte",
-  alimentacao: "Alimentação",
-  geral: "Geral",
-};
+// Removed static catLabels
 
 function emptyDespesa(): Partial<DespesaRow> {
   const hoje = new Date().toISOString().slice(0, 10);
@@ -61,6 +52,16 @@ export default function DespesasPage() {
   const despQ = useQuery({
     queryKey: ["despesas", ini, fim],
     queryFn: () => api.despesas({ data_ini: ini, data_fim: fim }),
+  });
+
+  const categQ = useQuery({
+    queryKey: ["categorias_despesa"],
+    queryFn: api.categoriasDespesa,
+  });
+
+  const formasQ = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: api.formasPagamento,
   });
 
   const saveM = useMutation({
@@ -180,9 +181,19 @@ export default function DespesasPage() {
                 <TableCell className="text-muted-foreground">{fmtDate(d.data)}</TableCell>
                 <TableCell className="font-medium text-foreground">{d.descricao}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="bg-secondary text-muted-foreground">
-                    {catLabels[d.categoria] || d.categoria}
-                  </Badge>
+                  {(() => {
+                    const catStr = d.categoria?.toLowerCase() || "";
+                    const match = (categQ.data || []).find((c: any) => c.nome.toLowerCase() === catStr || c.nome === d.categoria);
+                    if (match && match.cor) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: match.cor }}></div>
+                          <span className="text-sm font-medium">{match.nome}</span>
+                        </div>
+                      );
+                    }
+                    return <Badge variant="secondary">{d.categoria}</Badge>;
+                  })()}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{d.forma_pagamento}</TableCell>
                 <TableCell className="font-medium text-coral">- {brl(d.valor)}</TableCell>
@@ -248,9 +259,12 @@ export default function DespesasPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.keys(catLabels).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {catLabels[k]}
+                  {(categQ.data || []).map((c: any) => (
+                    <SelectItem key={c.id} value={c.nome}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.cor }}></div>
+                        {c.nome}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -263,9 +277,9 @@ export default function DespesasPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {["dinheiro", "pix", "cartao_debito", "cartao_credito"].map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {k}
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>

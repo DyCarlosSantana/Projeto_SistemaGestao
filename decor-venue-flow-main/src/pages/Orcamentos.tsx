@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCalcStore } from "@/store/calcStore";
 import { Info } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,7 +63,9 @@ export default function OrcamentosPage() {
 
   const [clienteNome, setClienteNome] = useState("");
   const [obs, setObs] = useState("");
-  const [desconto, setDesconto] = useState<number>(0);
+  const [desconto, setDesconto] = useState<number | string>("");
+  const [valorEntrada, setValorEntrada] = useState<number | string>("");
+  const navigate = useNavigate();
 
   const [itDesc, setItDesc] = useState("");
   const [itQtd, setItQtd] = useState<number>(1);
@@ -78,6 +81,11 @@ export default function OrcamentosPage() {
   const orcQ = useQuery({
     queryKey: ["orcamentos"],
     queryFn: api.orcamentos,
+  });
+
+  const formasQ = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: api.formasPagamento,
   });
 
   const aprovarM = useMutation({
@@ -103,11 +111,14 @@ export default function OrcamentosPage() {
   const converterM = useMutation({
     mutationFn: ({ id, forma_pagamento }: { id: number; forma_pagamento: string }) =>
       api.converterOrcamentoVenda(id, forma_pagamento),
-    onSuccess: async (d: any) => {
+    onSuccess: async (d: any, variables) => {
       toast.success(`Venda #${d?.venda?.id ?? ""} criada!`);
       await qc.invalidateQueries({ queryKey: ["orcamentos"] });
       await qc.invalidateQueries({ queryKey: ["dashboard"] });
       await qc.invalidateQueries({ queryKey: ["vendas"] });
+      if (variables.forma_pagamento === "fiado") {
+        navigate("/fiado");
+      }
     },
     onError: () => toast.error("Erro ao converter orçamento"),
   });
@@ -138,7 +149,8 @@ export default function OrcamentosPage() {
     setEditId(null);
     setClienteNome("");
     setObs("");
-    setDesconto(0);
+    setDesconto("");
+    setValorEntrada("");
     setItDesc("");
     setItQtd(1);
     setItPreco(0);
@@ -155,6 +167,7 @@ export default function OrcamentosPage() {
     setClienteNome(o.cliente_nome || "");
     setObs((o as any).obs || "");
     setDesconto(Number((o as any).desconto || 0));
+    setValorEntrada(Number((o as any).valor_entrada || 0));
 
     try {
       const itens = await api.orcamentoItens(o.id);
@@ -200,6 +213,7 @@ export default function OrcamentosPage() {
         subtotal: calcTotals.subtotal,
         desconto: Number(desconto) || 0,
         total: calcTotals.totalVal,
+        valor_entrada: Number(valorEntrada) || 0,
         obs,
         itens: items,
       };
@@ -322,7 +336,14 @@ export default function OrcamentosPage() {
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{fmtDate(o.validade)}</TableCell>
-                <TableCell className="font-medium text-foreground">{brl(o.total)}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  <div>{brl(o.total)}</div>
+                  {(o as any).valor_entrada > 0 && (
+                    <div className="text-xs text-muted-foreground font-normal">
+                      Restante: {brl(o.total - ((o as any).valor_entrada || 0))}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>{statusBadge(o.status)}</TableCell>
                 <TableCell className="text-right">
                   <div className="inline-flex flex-wrap justify-end gap-2">
@@ -524,9 +545,20 @@ export default function OrcamentosPage() {
                   onChange={(e) => setDesconto(Number(e.target.value))}
                 />
               </div>
-              <div className="mt-2 flex items-center justify-between text-base font-bold">
-                <span>TOTAL</span>
-                <span>{brl(calcTotals.totalVal)}</span>
+
+              <div className="flex justify-between items-center text-sm mt-3">
+                <span className="text-muted-foreground">Sinal / Entrada (R$)</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={valorEntrada}
+                  onChange={(e) => setValorEntrada(e.target.value)}
+                />
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between text-base font-bold">
+                <span>Restante a Pagar</span>
+                <span className="text-primary">{brl(calcTotals.totalVal - (Number(valorEntrada) || 0))}</span>
               </div>
             </div>
 
@@ -558,11 +590,11 @@ export default function OrcamentosPage() {
               <Select value={payForma} onValueChange={setPayForma}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                  <SelectItem value="fiado">Fiado</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

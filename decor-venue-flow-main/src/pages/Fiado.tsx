@@ -32,6 +32,11 @@ export default function FiadoPage() {
     queryFn: () => api.vendas({ status: "fiado", q: busca }),
   });
 
+  const formasQ = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: api.formasPagamento,
+  });
+
   const receberFiadoM = useMutation({
     mutationFn: ({ id, forma_pagamento }: { id: number; forma_pagamento: string }) =>
       api.receberVendaFiado(id, forma_pagamento),
@@ -154,10 +159,11 @@ export default function FiadoPage() {
               <Select value={payForma} onValueChange={setPayForma}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

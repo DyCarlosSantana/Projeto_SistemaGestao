@@ -63,7 +63,8 @@ export default function LocacoesPage() {
   const [dataDevolucao, setDataDevolucao] = useState("");
   const [formaPagamento, setFormaPagamento] = useState("dinheiro");
   const [obs, setObs] = useState("");
-  const [desconto, setDesconto] = useState<number>(0);
+  const [desconto, setDesconto] = useState<number | string>("");
+  const [valorEntrada, setValorEntrada] = useState<number | string>("");
 
   const [locItems, setLocItems] = useState<
     Array<{ nome: string; item_id?: number; kit_id?: number; quantidade: number; preco_unitario: number; subtotal: number }>
@@ -76,6 +77,11 @@ export default function LocacoesPage() {
   const locQ = useQuery({
     queryKey: ["locacoes", status],
     queryFn: () => api.locacoes(status || undefined),
+  });
+
+  const formasQ = useQuery({
+    queryKey: ["formas_pagamento"],
+    queryFn: api.formasPagamento,
   });
 
   const itensLocQ = useQuery({
@@ -126,7 +132,8 @@ export default function LocacoesPage() {
     setDataDevolucao("");
     setFormaPagamento("dinheiro");
     setObs("");
-    setDesconto(0);
+    setDesconto("");
+    setValorEntrada("");
     setLocItems([]);
     setSelId("");
     setSelQtd(1);
@@ -147,6 +154,7 @@ export default function LocacoesPage() {
     setFormaPagamento((l as any).forma_pagamento || "dinheiro");
     setObs((l as any).obs || "");
     setDesconto(Number((l as any).desconto || 0));
+    setValorEntrada(Number((l as any).valor_entrada || 0));
 
     try {
       const itens = await api.locacaoItens(l.id);
@@ -203,10 +211,13 @@ export default function LocacoesPage() {
   const [payForma, setPayForma] = useState('pix');
   const converterVendaM = useMutation({
     mutationFn: (data: { id: number; forma: string }) => api.converterLocacaoVenda(data.id, data.forma),
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
       toast.success("Venda gerada no PDV!");
       await qc.invalidateQueries({ queryKey: ["locacoes"] });
       await qc.invalidateQueries({ queryKey: ["dashboard"] });
+      if (variables.forma === "fiado") {
+        navigate("/fiado");
+      }
     },
     onError: () => toast.error("Erro ao converter para venda")
   });
@@ -227,6 +238,7 @@ export default function LocacoesPage() {
         subtotal,
         desconto: descVal,
         total: totalVal,
+        valor_entrada: Number(valorEntrada) || 0,
         forma_pagamento: formaPagamento,
         obs,
         itens: locItems.map((it) => ({
@@ -456,11 +468,11 @@ export default function LocacoesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão crédito</SelectItem>
-                  <SelectItem value="fiado">Fiado / prazo</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -587,9 +599,24 @@ export default function LocacoesPage() {
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-semibold text-foreground">{brl(locTotals.subtotal)}</span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-base font-bold">
-              <span>Total</span>
-              <span>{brl(locTotals.total)}</span>
+            
+            <div className="flex justify-between items-center text-sm font-medium mt-1 text-muted-foreground">
+              <span>Sinal / Entrada:</span>
+              <div className="flex items-center gap-2 max-w-[150px]">
+                <span className="text-muted-foreground">R$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  className="h-8 w-24 text-right"
+                  value={valorEntrada}
+                  onChange={(e) => setValorEntrada(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between text-base font-bold border-t border-border/50 pt-2">
+              <span>Restante a Pagar</span>
+              <span>{brl(locTotals.total - (Number(valorEntrada) || 0))}</span>
             </div>
           </div>
 
@@ -616,11 +643,11 @@ export default function LocacoesPage() {
               <Select value={payForma} onValueChange={setPayForma}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                  <SelectItem value="fiado">Fiado</SelectItem>
+                  {(formasQ.data || []).map((f: any) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

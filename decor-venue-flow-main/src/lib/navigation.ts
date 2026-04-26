@@ -68,6 +68,7 @@ export const navigation: NavGroup[] = [
     children: [
       { title: "Clientes", path: "/clientes", modulo: "clientes" },
       { title: "Produtos", path: "/produtos", modulo: "produtos" },
+      { title: "Serviços", path: "/servicos", modulo: "servicos" },
     ],
   },
   {

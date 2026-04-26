@@ -176,6 +176,8 @@ export const api = {
   salvarEncomenda: (payload: any, id?: number) => request<any>(id ? `/encomendas/${id}` : "/encomendas", { method: id ? "PUT" : "POST", body: payload }),
   excluirEncomenda: (id: number) => request<void>(`/encomendas/${id}`, { method: "DELETE" }),
   atualizarStatusEncomenda: (id: number, status: string) => request<any>(`/encomendas/${id}/status`, { method: "PUT", body: { status } }),
+  converterEncomendaVenda: (id: number, forma_pagamento: string) =>
+    request<any>(`/encomendas/${id}/converter`, { method: "POST", body: { forma_pagamento } }),
 
   servicos: (q?: { q?: string }) => request<any[]>("/servicos", { query: q as any }),
   salvarServico: (payload: any, id?: number) => request<any>(id ? `/servicos/${id}` : "/servicos", { method: id ? "PUT" : "POST", body: payload }),
@@ -183,14 +185,6 @@ export const api = {
 
   configuracoes: () => request<any>("/configuracoes"),
   salvarConfiguracoes: (payload: any) => request<any>("/configuracoes", { method: "POST", body: payload }),
-
-  // Modulos & Logo
-  toggleModulo: (modulo: string, ativo: boolean) => request<any>("/configuracoes/modulos/toggle", { method: "POST", body: { modulo, ativo } }),
-  uploadLogo: (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return request<any>("/upload/logo", { method: "POST", body: formData });
-  },
 
   cargos: () => request<any[]>("/cargos"),
   salvarCargo: (payload: any, id?: number) => request<any>(id ? `/cargos/${id}` : "/cargos", { method: id ? "PUT" : "POST", body: payload }),
@@ -264,14 +258,48 @@ export const api = {
     request<any>(id ? `/kits/${id}` : "/kits", { method: id ? "PUT" : "POST", body: payload }),
   excluirKit: (id: number) => request<void>(`/kits/${id}`, { method: "DELETE" }),
 
-  // Configurações avançadas e RBAC
-  modulos: () => request<any[]>("/configuracoes/modulos"),
+  // Fluxo de caixa
+  fluxoCaixa: (q: { data_ini: string; data_fim: string }) => request<any>("/fluxo-caixa", { query: q }),
 
+  // Módulos da empresa
+  modulos: () => request<any[]>("/configuracoes/modulos"),
+  toggleModulo: (modulo: string, ativo: boolean) =>
+    request<any>("/configuracoes/modulos/toggle", { method: "POST", body: { modulo, ativo } }),
+
+  // Categorias de Despesa (CRUD)
+  categoriasDespesa: () => request<any[]>("/configuracoes/categorias-despesa"),
+  criarCategoriaDespesa: (payload: { nome: string; cor: string }) =>
+    request<any>("/configuracoes/categorias-despesa", { method: "POST", body: payload }),
+  atualizarCategoriaDespesa: (id: number, payload: { nome: string; cor: string }) =>
+    request<any>(`/configuracoes/categorias-despesa/${id}`, { method: "PUT", body: payload }),
+  excluirCategoriaDespesa: (id: number) =>
+    request<void>(`/configuracoes/categorias-despesa/${id}`, { method: "DELETE" }),
+
+  // Formas de Pagamento (CRUD)
+  formasPagamento: () => request<any[]>("/configuracoes/formas-pagamento"),
+  criarFormaPagamento: (payload: { nome: string; tipo: string }) =>
+    request<any>("/configuracoes/formas-pagamento", { method: "POST", body: payload }),
+  atualizarFormaPagamento: (id: number, payload: { nome: string; tipo: string }) =>
+    request<any>(`/configuracoes/formas-pagamento/${id}`, { method: "PUT", body: payload }),
+  excluirFormaPagamento: (id: number) =>
+    request<void>(`/configuracoes/formas-pagamento/${id}`, { method: "DELETE" }),
+
+  // Senha e perfil
+  alterarMinhaSenha: (senha_atual: string, nova_senha: string) =>
+    request<any>("/me/senha", { method: "PUT", body: { senha_atual, nova_senha } }),
+
+  // Usuário editar
+  editarUsuario: (id: number, payload: any) =>
+    request<any>(`/usuarios/${id}`, { method: "PUT", body: payload }),
+
+  // Backups
   backups: () => request<any[]>("/backup/lista"),
   fazerBackupManual: () => request<any>("/backup/manual", { method: "POST" }),
 
-  // Fluxo de caixa
-  fluxoCaixa: (q: { data_ini: string; data_fim: string }) => request<any>("/fluxo-caixa", { query: q }),
+  // Logo
+  uploadLogo: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<any>("/upload/logo", { method: "POST", body: formData });
+  },
 };
-
-
